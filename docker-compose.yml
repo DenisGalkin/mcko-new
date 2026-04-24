@@ -1,0 +1,33 @@
+services:
+  web:
+    build: .
+    command: gunicorn --bind 0.0.0.0:1000 --workers 1 --threads 4 app:app
+    env_file: .env
+    volumes:
+      - ./uploads:/app/uploads
+      - ./data.json:/app/data.json
+      - ./logs:/app/logs
+    restart: always
+
+  bot:
+    build: .
+    command: python bot.py
+    env_file: .env
+    volumes:
+      - ./uploads:/app/uploads
+      - ./data.json:/app/data.json
+      - ./logs:/app/logs
+    restart: always
+
+  caddy:
+    image: caddy:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+    restart: always
+
+volumes:
+  caddy_data:
