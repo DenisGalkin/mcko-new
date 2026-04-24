@@ -2,14 +2,90 @@ import json
 
 from config import Config, logger
 
+TASK_SEQUENCE = [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10.1",
+    "10.2",
+    "10.3",
+]
+
+SPECIAL_TASK_INPUTS = {
+    "101": "10.1",
+    "10.1": "10.1",
+    "10,1": "10.1",
+    "102": "10.2",
+    "10.2": "10.2",
+    "10,2": "10.2",
+    "103": "10.3",
+    "10.3": "10.3",
+    "10,3": "10.3",
+}
+
+
+def normalize_task_number(raw_value):
+    raw = str(raw_value or "").strip()
+    if not raw:
+        return None
+
+    raw = raw.replace(",", ".")
+    if raw in SPECIAL_TASK_INPUTS:
+        return SPECIAL_TASK_INPUTS[raw]
+
+    if raw.isdigit() and raw in TASK_SEQUENCE:
+        return raw
+
+    return raw if raw in TASK_SEQUENCE else None
+
+
+def task_number_to_code(task_number):
+    normalized = normalize_task_number(task_number)
+    if not normalized:
+        raise ValueError(f"Unsupported task number: {task_number}")
+    return normalized.replace(".", "")
+
+
+def task_code_to_number(task_code):
+    raw = str(task_code or "").strip()
+    if raw in {"101", "102", "103"}:
+        return f"10.{raw[-1]}"
+    return raw
+
+
+def task_sort_key(task_number):
+    normalized = normalize_task_number(task_number)
+    if normalized in TASK_SEQUENCE:
+        return TASK_SEQUENCE.index(normalized)
+    return len(TASK_SEQUENCE)
+
+
+def get_next_task_number(task_number, offset=1):
+    normalized = normalize_task_number(task_number)
+    if normalized not in TASK_SEQUENCE:
+        return TASK_SEQUENCE[0]
+
+    index = TASK_SEQUENCE.index(normalized) + int(offset)
+    if index < 0:
+        index = 0
+    if index >= len(TASK_SEQUENCE):
+        index = len(TASK_SEQUENCE) - 1
+    return TASK_SEQUENCE[index]
+
 
 def build_task_key(user_id, task_number):
-    return f"{int(user_id)}:{int(task_number)}"
+    return f"{int(user_id)}:{task_number_to_code(task_number)}"
 
 
 def parse_task_key(task_key):
     raw_user_id, raw_task_number = str(task_key).split(":", 1)
-    return int(raw_user_id), int(raw_task_number)
+    return int(raw_user_id), task_code_to_number(raw_task_number)
 
 
 def empty_data():
@@ -40,9 +116,11 @@ def load_data():
                 parsed_user_id, parsed_task_number = parse_task_key(raw_key)
             else:
                 parsed_user_id = 0
-                parsed_task_number = int(task.get("task_number", raw_key))
+                parsed_task_number = task_code_to_number(task.get("task_code", task.get("task_number", raw_key)))
 
-            task_number = int(task.get("task_number", parsed_task_number))
+            task_number = normalize_task_number(task.get("task_number", parsed_task_number))
+            if not task_number:
+                continue
             user_id = int(task.get("user_id", parsed_user_id))
             task_key = build_task_key(user_id, task_number)
 
@@ -52,6 +130,7 @@ def load_data():
             task.setdefault("created", "")
             task["user_id"] = user_id
             task["task_number"] = task_number
+            task["task_code"] = task_number_to_code(task_number)
             task["task_key"] = task_key
             normalized_tasks[task_key] = task
             data["users"].setdefault(str(user_id), {"created_at": task.get("created", "")})
@@ -111,13 +190,14 @@ def save_task_description(task_key, text):
 
 
 def get_task_file(task_num, user_id=None):
-    prefix = f"{task_num}_{user_id}." if user_id is not None else f"{task_num}."
+    task_code = task_number_to_code(task_num)
+    prefix = f"{task_code}_{user_id}." if user_id is not None else f"{task_code}."
     for path in Config.UPLOAD_DIR.iterdir():
         if path.is_file() and path.name.startswith(prefix):
             return path
 
     if user_id is not None:
-        legacy_prefix = f"{task_num}."
+        legacy_prefix = f"{task_code}."
         for path in Config.UPLOAD_DIR.iterdir():
             if path.is_file() and path.name.startswith(legacy_prefix):
                 return path
@@ -130,12 +210,14 @@ def get_tasks_for_user(data, user_id):
         for task in data.get("tasks", {}).values()
         if int(task.get("user_id", 0)) == int(user_id)
     ]
-    return sorted(tasks, key=lambda item: int(item["task_number"]))
+    return sorted(tasks, key=lambda item: task_sort_key(item["task_number"]))
 
 
 def get_next_task_number_for_user(data, user_id):
     user_tasks = get_tasks_for_user(data, user_id)
-    return max([int(task["task_number"]) for task in user_tasks] or [0]) + 1
+    if not user_tasks:
+        return TASK_SEQUENCE[0]
+    return get_next_task_number(user_tasks[-1]["task_number"])
 
 
 def allocate_user_id():

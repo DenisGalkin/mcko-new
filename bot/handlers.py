@@ -18,6 +18,7 @@ from shared.manager import (
 
 router = Router()
 TASKS_PER_PAGE = 6
+TELEGRAM_TEXT_LIMIT = 4000
 TASKS_BUTTON_TEXT = "📚 Задания"
 LATEST_BUTTON_TEXT = "🆕 Последнее"
 HELP_BUTTON_TEXT = "ℹ️ Помощь"
@@ -28,15 +29,18 @@ ALL_FILTER = "0"
 
 def parse_task_ref(task_ref):
     raw_user_id, raw_task_number = str(task_ref).split("_", 1)
-    return int(raw_user_id), int(raw_task_number)
+    return int(raw_user_id), raw_task_number
 
 
 def encode_task_ref(task):
-    return f"{int(task['user_id'])}_{int(task['task_number'])}"
+    return (
+        f"{int(task['user_id'])}_"
+        f"{task.get('task_code', str(task['task_number']).replace('.', ''))}"
+    )
 
 
 def task_label(task):
-    return f"№{int(task['task_number'])} User {int(task['user_id'])}"
+    return f"№{task['task_number']} User {int(task['user_id'])}"
 
 
 def encode_list_state(page=0, user_id=ALL_FILTER, task_number=ALL_FILTER):
@@ -75,7 +79,7 @@ def get_sorted_tasks(data):
         key=lambda task: (
             parse_created_at(task),
             int(task.get("user_id", 0)),
-            int(task.get("task_number", 0)),
+            [int(part) for part in str(task.get("task_number", "999")).split(".")],
         ),
         reverse=True,
     )
@@ -120,7 +124,10 @@ def get_help_text():
 
 def get_filter_values(tasks):
     user_ids = sorted({str(int(task["user_id"])) for task in tasks}, key=int)
-    task_numbers = sorted({str(int(task["task_number"])) for task in tasks}, key=int)
+    task_numbers = sorted(
+        {str(task["task_number"]) for task in tasks},
+        key=lambda value: [int(part) for part in value.split(".")],
+    )
     return user_ids, task_numbers
 
 
@@ -129,9 +136,7 @@ def filter_tasks(tasks, user_id=ALL_FILTER, task_number=ALL_FILTER):
     if user_id != ALL_FILTER:
         filtered = [task for task in filtered if str(int(task["user_id"])) == str(user_id)]
     if task_number != ALL_FILTER:
-        filtered = [
-            task for task in filtered if str(int(task["task_number"])) == str(task_number)
-        ]
+        filtered = [task for task in filtered if str(task["task_number"]) == str(task_number)]
     return filtered
 
 
@@ -140,7 +145,7 @@ def get_filter_caption(user_id=ALL_FILTER, task_number=ALL_FILTER):
     task_label_text = f"№{task_number}" if task_number != ALL_FILTER else "все"
     return (
         "Эмодзи: 📎 файл, 🧾 текст, ✅ ответ.\n"
-        f"Фильтры: User {user_label if user_id == ALL_FILTER else user_id} | "
+        f"Фильтры: {user_label} | "
         f"Задание {task_label_text}"
     )
 
@@ -324,6 +329,13 @@ def build_task_actions_keyboard(tasks, current_task, page=0, user_id=ALL_FILTER,
 
 
 async def respond_or_edit(target_message, text, reply_markup=None, edit=False):
+    if len(text) > TELEGRAM_TEXT_LIMIT:
+        if edit:
+            await send_text_chunks(target_message, text, reply_markup=reply_markup)
+            return
+        await send_text_chunks(target_message, text, reply_markup=reply_markup)
+        return
+
     if edit:
         try:
             await target_message.edit_text(text, reply_markup=reply_markup)
@@ -331,6 +343,39 @@ async def respond_or_edit(target_message, text, reply_markup=None, edit=False):
         except Exception:
             pass
     await target_message.answer(text, reply_markup=reply_markup)
+
+
+def split_text_chunks(text, limit=TELEGRAM_TEXT_LIMIT):
+    text = str(text or "")
+    if len(text) <= limit:
+        return [text]
+
+    chunks = []
+    remaining = text
+    while remaining:
+        if len(remaining) <= limit:
+            chunks.append(remaining)
+            break
+
+        split_at = remaining.rfind("\n", 0, limit)
+        if split_at < limit // 2:
+            split_at = remaining.rfind(" ", 0, limit)
+        if split_at < limit // 2:
+            split_at = limit
+
+        chunks.append(remaining[:split_at].rstrip())
+        remaining = remaining[split_at:].lstrip()
+
+    return [chunk for chunk in chunks if chunk] or [""]
+
+
+async def send_text_chunks(target_message, text, reply_markup=None):
+    chunks = split_text_chunks(text)
+    for index, chunk in enumerate(chunks):
+        await target_message.answer(
+            chunk,
+            reply_markup=reply_markup if index == len(chunks) - 1 else None,
+        )
 
 
 def format_task_card(task):
@@ -454,6 +499,7 @@ async def resend_task_file(target_message, user_id, task_number):
             f"{target_message.chat.id}:{msg.message_id}": {
                 "task_key": task["task_key"],
                 "task_number": task_number,
+                "task_code": task.get("task_code", str(task_number).replace(".", "")),
                 "user_id": user_id,
                 "at": datetime.now().isoformat(),
             }
@@ -469,7 +515,10 @@ async def send_task_answer(target_message, user_id, task_number):
 
     answer = (task.get("answer_text") or "").strip()
     if answer:
-        await target_message.answer(f"📝 Ответ для {task_label(task)}:\n\n{answer}")
+        await send_text_chunks(
+            target_message,
+            f"📝 Ответ для {task_label(task)}:\n\n{answer}",
+        )
     else:
         await target_message.answer(f"📝 Для {task_label(task)} ответ пока не сохранен")
 
@@ -482,7 +531,10 @@ async def send_task_text(target_message, user_id, task_number):
 
     task_text = (task.get("task_text") or "").strip()
     if task_text:
-        await target_message.answer(f"🧾 Текст для {task_label(task)}:\n\n{task_text}")
+        await send_text_chunks(
+            target_message,
+            f"🧾 Текст для {task_label(task)}:\n\n{task_text}",
+        )
     else:
         await target_message.answer(f"🧾 У {task_label(task)} нет текста")
 
@@ -574,12 +626,12 @@ async def handle_reply(m: types.Message):
     if mapping:
         task_key = mapping.get(
             "task_key",
-            build_task_key(mapping.get("user_id", 0), mapping.get("task_number", 0)),
+            build_task_key(mapping.get("user_id", 0), mapping.get("task_number", "")),
         )
         if save_task_answer(task_key, m.text):
             user_id, task_number = mapping.get("user_id"), mapping.get("task_number")
             logger.success(
-                f"Сохранен ответ от {m.chat.id} для задания User {user_id} №{task_number}"
+                f"Сохранен ответ от {m.chat.id} для задания №{task_number} User {user_id}"
             )
             await m.answer(f"💾 Ответ сохранен для №{task_number} User {user_id}")
         else:

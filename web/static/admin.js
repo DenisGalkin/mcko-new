@@ -1,12 +1,14 @@
 const initialTasks = window.adminInitialTasks || [];
 
 const adminTaskList = document.getElementById("adminTaskList");
+const adminListMeta = document.getElementById("adminListMeta");
 const adminSearch = document.getElementById("adminSearch");
 const adminUserFilter = document.getElementById("adminUserFilter");
 const adminEditor = document.getElementById("adminEditor");
 const adminEmpty = document.getElementById("adminEmpty");
 const adminTaskTitle = document.getElementById("adminTaskTitle");
 const adminTaskUser = document.getElementById("adminTaskUser");
+const adminHeadingTags = document.getElementById("adminHeadingTags");
 const adminTaskCreated = document.getElementById("adminTaskCreated");
 const adminTaskStatus = document.getElementById("adminTaskStatus");
 const adminFilename = document.getElementById("adminFilename");
@@ -18,7 +20,7 @@ const adminFlash = document.getElementById("adminFlash");
 const prevTaskBtn = document.getElementById("prevTaskBtn");
 const nextTaskBtn = document.getElementById("nextTaskBtn");
 const refreshTasksBtn = document.getElementById("refreshTasksBtn");
-const saveTaskTextBtn = document.getElementById("saveTaskTextBtn");
+const clearFiltersBtn = document.getElementById("clearFiltersBtn");
 const saveAnswerBtnAdmin = document.getElementById("saveAnswerBtnAdmin");
 const clearAnswerBtn = document.getElementById("clearAnswerBtn");
 const deleteTaskBtn = document.getElementById("deleteTaskBtn");
@@ -26,6 +28,9 @@ const statTotal = document.getElementById("statTotal");
 const statSolved = document.getElementById("statSolved");
 const statOpen = document.getElementById("statOpen");
 const filterButtons = [...document.querySelectorAll(".admin_filter_btn")];
+const mobileListBtn = document.getElementById("mobileListBtn");
+const mobileEditorBtn = document.getElementById("mobileEditorBtn");
+const mobileRefreshBtn = document.getElementById("mobileRefreshBtn");
 
 const state = {
   tasks: normalizeTasks(initialTasks),
@@ -33,13 +38,15 @@ const state = {
   filter: "all",
   query: "",
   userFilter: "",
+  mobilePane: "list",
 };
 
 function normalizeTasks(tasks) {
   return [...tasks]
     .map((task) => ({
       ...task,
-      task_number: Number(task.task_number),
+      task_number: String(task.task_number || ""),
+      task_code: String(task.task_code || String(task.task_number || "").replace(".", "")),
       user_id: Number(task.user_id || 0),
       task_key: task.task_key || `${task.user_id || 0}:${task.task_number}`,
       answer_text: task.answer_text || "",
@@ -47,7 +54,9 @@ function normalizeTasks(tasks) {
       filename: task.filename || "",
       created: task.created || "",
     }))
-    .sort((a, b) => a.task_number - b.task_number);
+    .sort((a, b) =>
+      a.task_number.localeCompare(b.task_number, undefined, { numeric: true }),
+    );
 }
 
 function getFilteredTasks() {
@@ -61,7 +70,8 @@ function getFilteredTasks() {
     const haystack = [
       `u${task.user_id}`,
       String(task.user_id),
-      String(task.task_number),
+      task.task_number,
+      task.task_code,
       task.filename,
       task.created,
       task.answer_text,
@@ -99,6 +109,9 @@ function renderUserFilter() {
 function renderTaskList() {
   const filtered = getFilteredTasks();
   adminTaskList.innerHTML = "";
+  adminListMeta.textContent = filtered.length
+    ? `Найдено ${filtered.length} заданий`
+    : "Ничего не найдено";
 
   if (!filtered.length) {
     adminTaskList.innerHTML =
@@ -123,12 +136,13 @@ function renderTaskList() {
     }
     item.dataset.task = task.task_number;
     item.innerHTML = `
-      <span class="admin_task_num">U${task.user_id} • #${task.task_number}</span>
+      <span class="admin_task_num">№${task.task_number} User ${task.user_id}</span>
       <span class="admin_task_name">${escapeHtml(task.filename || "Без файла")}</span>
       <span class="admin_task_state">${task.answer_text.trim() ? "Есть ответ" : "Без ответа"}</span>
     `;
     item.addEventListener("click", () => {
       state.selectedTaskKey = task.task_key;
+      state.mobilePane = "editor";
       renderTaskList();
       renderEditor(task);
     });
@@ -142,23 +156,44 @@ function renderEditor(task) {
   if (!task) {
     adminEditor.hidden = true;
     adminEmpty.hidden = false;
+    adminHeadingTags.innerHTML = "";
+    syncMobilePane();
     return;
   }
 
   adminEditor.hidden = false;
   adminEmpty.hidden = true;
 
-  adminTaskTitle.textContent = `#${task.task_number}`;
-  adminTaskUser.textContent = `Пользователь ${task.user_id}`;
+  adminTaskTitle.textContent = `№${task.task_number}`;
+  adminTaskUser.textContent = `User ${task.user_id}`;
   adminTaskCreated.textContent = task.created ? `Создано: ${task.created}` : "";
   adminTaskStatus.textContent = task.answer_text.trim() ? "Ответ сохранен" : "Без ответа";
   adminTaskStatus.classList.toggle("is-solved", Boolean(task.answer_text.trim()));
   adminFilename.textContent = task.filename || "Без файла";
-  adminTaskText.value = task.task_text || "";
+  adminTaskText.textContent = (task.task_text || "").trim() || "У этого задания нет текста.";
+  adminTaskText.classList.toggle("is-empty", !String(task.task_text || "").trim());
   adminAnswerText.value = task.answer_text || "";
+  renderHeadingTags(task);
 
   renderPreview(task);
   syncNavigation();
+  syncMobilePane();
+}
+
+function renderHeadingTags(task) {
+  const tags = [];
+  tags.push(`<span class="admin_tag">User ${task.user_id}</span>`);
+  tags.push(`<span class="admin_tag">№${task.task_number}</span>`);
+  tags.push(
+    `<span class="admin_tag ${task.filename ? "is-active" : ""}">${task.filename ? "Есть файл" : "Без файла"}</span>`,
+  );
+  tags.push(
+    `<span class="admin_tag ${(task.task_text || "").trim() ? "is-active" : ""}">${(task.task_text || "").trim() ? "Есть текст" : "Без текста"}</span>`,
+  );
+  tags.push(
+    `<span class="admin_tag ${(task.answer_text || "").trim() ? "is-active" : ""}">${(task.answer_text || "").trim() ? "Есть ответ" : "Без ответа"}</span>`,
+  );
+  adminHeadingTags.innerHTML = tags.join("");
 }
 
 function renderPreview(task) {
@@ -202,13 +237,15 @@ function syncNavigation() {
 
 function updateTaskInState(updatedTask) {
   const normalized = normalizeTasks([updatedTask])[0];
-  const index = state.tasks.findIndex((task) => task.task_number === normalized.task_number);
-  if (index === -1) {
+  const keyIndex = state.tasks.findIndex((task) => task.task_key === normalized.task_key);
+  if (keyIndex === -1) {
     state.tasks.push(normalized);
   } else {
-    state.tasks[index] = normalized;
+    state.tasks[keyIndex] = normalized;
   }
-  state.tasks.sort((a, b) => a.task_number - b.task_number);
+  state.tasks.sort((a, b) =>
+    a.task_number.localeCompare(b.task_number, undefined, { numeric: true }),
+  );
 }
 
 async function saveCurrentTask(fields) {
@@ -231,6 +268,8 @@ async function saveCurrentTask(fields) {
     renderStats();
     renderUserFilter();
     renderTaskList();
+    state.mobilePane = "editor";
+    syncMobilePane();
     showFlash("Сохранено");
   } catch (error) {
     showFlash("Не удалось сохранить", true);
@@ -261,7 +300,7 @@ async function refreshTasks() {
 async function deleteCurrentTask() {
   const task = state.tasks.find((item) => item.task_key === state.selectedTaskKey);
   if (!task) return;
-  if (!window.confirm(`Удалить задание #${task.task_number}?`)) return;
+  if (!window.confirm(`Удалить задание №${task.task_number} User ${task.user_id}?`)) return;
 
   try {
     const response = await fetch(`/api/tasks/${encodeURIComponent(task.task_key)}`, {
@@ -279,7 +318,7 @@ async function deleteCurrentTask() {
     renderStats();
     renderUserFilter();
     renderTaskList();
-    showFlash(`Задание #${task.task_number} удалено`);
+    showFlash(`Задание №${task.task_number} User ${task.user_id} удалено`);
   } catch (error) {
     showFlash("Не удалось удалить задание", true);
   }
@@ -293,6 +332,30 @@ function showFlash(text, isError = false) {
   showFlash._timer = setTimeout(() => {
     adminFlash.classList.remove("visible");
   }, 1800);
+}
+
+function setActiveFilter(filter) {
+  state.filter = filter;
+  filterButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.filter === filter);
+  });
+}
+
+function clearFilters() {
+  state.query = "";
+  state.userFilter = "";
+  setActiveFilter("all");
+  adminSearch.value = "";
+  adminUserFilter.value = "";
+  renderTaskList();
+}
+
+function syncMobilePane() {
+  const isMobile = window.matchMedia("(max-width: 860px)").matches;
+  document.body.classList.toggle("admin_mobile_list", isMobile && state.mobilePane === "list");
+  document.body.classList.toggle("admin_mobile_editor", isMobile && state.mobilePane === "editor");
+  mobileListBtn.classList.toggle("active", !isMobile || state.mobilePane === "list");
+  mobileEditorBtn.classList.toggle("active", isMobile && state.mobilePane === "editor");
 }
 
 function escapeHtml(value) {
@@ -316,9 +379,7 @@ adminUserFilter.addEventListener("change", () => {
 
 filterButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    filterButtons.forEach((item) => item.classList.remove("active"));
-    button.classList.add("active");
-    state.filter = button.dataset.filter;
+    setActiveFilter(button.dataset.filter);
     renderTaskList();
   });
 });
@@ -328,6 +389,7 @@ prevTaskBtn.addEventListener("click", () => {
   const index = filtered.findIndex((task) => task.task_key === state.selectedTaskKey);
   if (index > 0) {
     state.selectedTaskKey = filtered[index - 1].task_key;
+    state.mobilePane = "editor";
     renderTaskList();
   }
 });
@@ -337,20 +399,33 @@ nextTaskBtn.addEventListener("click", () => {
   const index = filtered.findIndex((task) => task.task_key === state.selectedTaskKey);
   if (index !== -1 && index < filtered.length - 1) {
     state.selectedTaskKey = filtered[index + 1].task_key;
+    state.mobilePane = "editor";
     renderTaskList();
   }
 });
 
+clearFiltersBtn.addEventListener("click", clearFilters);
 refreshTasksBtn.addEventListener("click", refreshTasks);
-saveTaskTextBtn.addEventListener("click", () => saveCurrentTask({ task_text: adminTaskText.value }));
+mobileRefreshBtn.addEventListener("click", refreshTasks);
 saveAnswerBtnAdmin.addEventListener("click", () => saveCurrentTask({ answer_text: adminAnswerText.value }));
 clearAnswerBtn.addEventListener("click", () => {
   adminAnswerText.value = "";
   saveCurrentTask({ answer_text: "" });
 });
 deleteTaskBtn.addEventListener("click", deleteCurrentTask);
+mobileListBtn.addEventListener("click", () => {
+  state.mobilePane = "list";
+  syncMobilePane();
+});
+mobileEditorBtn.addEventListener("click", () => {
+  state.mobilePane = "editor";
+  syncMobilePane();
+});
+
+window.addEventListener("resize", syncMobilePane);
 
 state.selectedTaskKey = state.tasks[0] ? state.tasks[0].task_key : null;
 renderStats();
 renderUserFilter();
 renderTaskList();
+syncMobilePane();

@@ -7,12 +7,17 @@ from aiohttp import web
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import Config, logger
-from shared.manager import build_task_key, load_data, merge_telegram_message_map
+from shared.manager import (
+    build_task_key,
+    load_data,
+    merge_telegram_message_map,
+    task_number_to_code,
+)
 
 
 def build_notification_keyboard(user_id, task_number):
     builder = InlineKeyboardBuilder()
-    task_ref = f"{user_id}_{task_number}"
+    task_ref = f"{user_id}_{task_number_to_code(task_number)}"
     builder.row(
         InlineKeyboardButton(
             text="📝 Ответ", callback_data=f"task:answer:{task_ref}"
@@ -39,7 +44,7 @@ async def notify_subscribers(bot: Bot, task_key, user_id, task_number, filename,
     path = Config.UPLOAD_DIR / filename if filename else None
     count = 0
     message_map_updates = {}
-    task_label = f"U{user_id} • #{task_number}"
+    task_label = f"№{task_number} User {user_id}"
 
     for chat_id in load_data().get("telegram_subscribers", {}):
         try:
@@ -71,6 +76,7 @@ async def notify_subscribers(bot: Bot, task_key, user_id, task_number, filename,
             message_map_updates[f"{chat_id}:{msg.message_id}"] = {
                 "task_key": task_key,
                 "task_number": task_number,
+                "task_code": str(task_number).replace(".", ""),
                 "user_id": user_id,
                 "at": datetime.now().isoformat(),
             }
@@ -90,7 +96,7 @@ async def start_bot_server(bot: Bot, dp: Dispatcher):
             payload = await request.json()
             logger.info(f"Получено уведомление от Web: {payload}")
             user_id = int(payload["user_id"])
-            task_number = int(payload["task_number"])
+            task_number = str(payload["task_number"])
             asyncio.create_task(
                 notify_subscribers(
                     bot,

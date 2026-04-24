@@ -50,7 +50,7 @@
                         Описание
                     </button>
                     <button
-                        class="qnum yellow task-btn"
+                        class="qnum qramka task-btn"
                         type="button"
                         data-task="1"
                     >
@@ -63,31 +63,59 @@
                     >
                         2
                     </button>
-                    <button class="qnum task-btn" type="button" data-task="3">
+                    <button
+                        class="qnum yellow task-btn"
+                        type="button"
+                        data-task="3"
+                    >
                         3
                     </button>
                     <button class="qnum task-btn" type="button" data-task="4">
                         4
                     </button>
-                    <button class="qnum task-btn" type="button" data-task="5">
-                        5
-                    </button>
                     <button
                         class="qnum yellow task-btn"
                         type="button"
-                        data-task="6"
+                        data-task="5"
                     >
+                        5
+                    </button>
+                    <button class="qnum task-btn" type="button" data-task="6">
                         6
                     </button>
-                    <button
-                        class="qnum qramka task-btn"
-                        type="button"
-                        data-task="7"
-                    >
+                    <button class="qnum task-btn" type="button" data-task="7">
                         7
                     </button>
                     <button class="qnum task-btn" type="button" data-task="8">
                         8
+                    </button>
+                    <button
+                        class="qnum yellow task-btn"
+                        type="button"
+                        data-task="9"
+                    >
+                        9
+                    </button>
+                    <button
+                        class="qnum task-btn"
+                        type="button"
+                        data-task="10.1"
+                    >
+                        10.1
+                    </button>
+                    <button
+                        class="qnum task-btn"
+                        type="button"
+                        data-task="10.2"
+                    >
+                        10.2
+                    </button>
+                    <button
+                        class="qnum task-btn"
+                        type="button"
+                        data-task="10.3"
+                    >
+                        10.3
                     </button>
                     <button class="qnum" type="button" id="finishBtn">
                         закончить
@@ -101,19 +129,56 @@
 
         <div id="content">
             <div id="QuestionTest">
-                <p style="border: 1px solid #000; text-align: center">
-                    <b
-                        >Ответ на задание запишите в виде целого числа или
-                        конечной десятичной дроби.</b
-                    >
+                <p
+                    class="MsoNormal"
+                    style="
+                        border: 1px solid black;
+                        text-align: center;
+                        margin: 0px;
+                        padding: 0px 3px;
+                        line-height: 1.5;
+                    "
+                >
+                    <b><i>Прочитайте текст 1 и выполните задания 1 и 2.</i></b>
                 </p>
-                <br />
+                <p class="MsoNormal">&nbsp;</p>
 
-                <p class="MsoNormal">
-                    В некотором случайном эксперименте рассматривается случайная
-                    величина <i>X</i>. Известно, что <i>P(X ≤ 15)</i> = 0,77 и
-                    <i>P(X ≥ 10)</i> = 0,58. Найдите вероятность события
-                    <i>(10 ≤ X ≤ 15)</i>.
+                <div
+                    style="
+                        border: 2px solid #996633;
+                        background: #fff9ed;
+                        padding: 10px;
+                        margin: 10px 0px;
+                    "
+                >
+                    <center>Текст 1</center>
+
+                    <p>
+                        (1)В начале 1870 года русские художники поняли наконец
+                        прелесть природы средней полосы. (2)Ранее их привлекали
+                        экзотические красоты итальянских и крымских ландшафтов.
+                        (3)Неброское обаяние пейзажей средней полосы могло быть
+                        выражено только через эмоциональное состояние творца.
+                        (4)Если для передачи величия моря и гор художнику порой
+                        достаточно сосредоточиться на местности, то здесь
+                        значимой стала необходимость выразить субъективное
+                        отношение, ибо только так можно было раскрыть внешне
+                        неприметную, но полную тихого очарования душу русской
+                        природы, углубить её восприятие.
+                    </p>
+
+                    <p
+                        class="MsoNormal"
+                        align="right"
+                        style="text-align: right; line-height: 1.5"
+                    >
+                        <i>(По И. Кашековой)</i>
+                    </p>
+                </div>
+
+                <p class="qq">
+                    Подберите и запишите <b>синоним</b> к слову «неброский» из
+                    предложения 3.
                 </p>
 
                 <div class="answer_flex">
@@ -122,12 +187,12 @@
                         <input
                             type="text"
                             id="a0"
-                            style="width: 90px; text-align: center"
                             autocomplete="off"
                             spellcheck="false"
                         />.
                     </p>
                 </div>
+                <br />
             </div>
 
             <div

@@ -3,12 +3,6 @@ const initialAnswers = window.initialAnswers;
 const initialTaskTexts = window.initialTaskTexts || {};
 let currentTask = window.currentTask || "";
 
-function CheckInt(element) {
-  element.value = element.value.replace(/[^-–0123456789.,]+/g, "");
-  element.value = element.value.replace(/\./g, ",");
-  element.value = element.value.replace(/-/, "–");
-}
-
 const uploadWrapper = document.getElementById("uploadWrapper");
 const filesWrapper = document.getElementById("filesWrapper");
 const descriptionWrapper = document.getElementById("descriptionWrapper");
@@ -37,18 +31,18 @@ const state = {
   taskTexts: { ...initialTaskTexts },
 };
 
+function compareTaskNumbers(a, b) {
+  return String(a).localeCompare(String(b), undefined, { numeric: true });
+}
+
 if (!currentTask) {
   const firstTask = Object.keys(state.answers).sort(function (a, b) {
-    return Number(a) - Number(b);
+    return a.localeCompare(b, undefined, { numeric: true });
   })[0];
   currentTask = firstTask || "";
 }
 
 answerInput.value = currentTask ? initialAnswers[currentTask] || "" : "";
-
-answerInput.addEventListener("input", function () {
-  CheckInt(this);
-});
 
 answerPanel.addEventListener("click", function () {
   hideExpandedPanels();
@@ -147,7 +141,7 @@ async function uploadFiles(files) {
   normalizedFiles.forEach(function (file) {
     formData.append("files", file);
   });
-  formData.append("task_number", answerInput.value.trim());
+  formData.append("task_number", currentTask || "");
   formData.append("task_text", taskText);
   showUploadNotice(
     normalizedFiles.length === 1
@@ -204,7 +198,7 @@ sendTextBtn.addEventListener("click", async function () {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        task_number: answerInput.value.trim(),
+        task_number: currentTask || "",
         text,
       }),
     });
@@ -293,8 +287,8 @@ function upsertTaskFileRow(task) {
   let inserted = false;
 
   for (const current of rows) {
-    const currentTask = Number(current.dataset.task);
-    if (Number(task.task_number) < currentTask) {
+    const currentTask = String(current.dataset.task);
+    if (compareTaskNumbers(task.task_number, currentTask) < 0) {
       fileList.insertBefore(row, current);
       inserted = true;
       break;
@@ -341,8 +335,8 @@ function upsertDescriptionRow(task) {
   let inserted = false;
 
   for (const current of rows) {
-    const currentTask = Number(current.dataset.task);
-    if (Number(task.task_number) < currentTask) {
+    const currentTask = String(current.dataset.task);
+    if (compareTaskNumbers(task.task_number, currentTask) < 0) {
       descriptionList.insertBefore(row, current);
       inserted = true;
       break;

@@ -10,12 +10,16 @@ from shared.manager import (
     build_task_key,
     cleanup_data,
     get_task_file,
+    get_next_task_number,
     get_tasks_for_user,
     get_next_task_number_for_user,
     has_user,
     load_data,
+    normalize_task_number,
     save_data,
     save_task_answer,
+    task_number_to_code,
+    task_sort_key,
 )
 
 main = Blueprint("main", __name__)
@@ -47,7 +51,7 @@ def with_user_cookie(response, user_id, created):
 def sort_tasks_for_admin(tasks):
     return sorted(
         tasks,
-        key=lambda item: (int(item.get("user_id", 0)), int(item.get("task_number", 0))),
+        key=lambda item: (int(item.get("user_id", 0)), task_sort_key(item.get("task_number"))),
     )
 
 
@@ -65,13 +69,14 @@ def notify_bot(task_info):
             timeout=2,
         )
         logger.info(
-            f"Запрос к боту для задания U{task_info['user_id']} #{task_info['task_number']}: "
+            f"Запрос к боту для задания №{task_info['task_number']} "
+            f"User {task_info['user_id']}: "
             f"{resp.status_code}"
         )
     except Exception as e:
         logger.error(
-            f"Не удалось уведомить бота по заданию U{task_info['user_id']} "
-            f"#{task_info['task_number']}: {e}"
+            f"Не удалось уведомить бота по заданию №{task_info['task_number']} "
+            f"User {task_info['user_id']}: {e}"
         )
 
 
@@ -122,24 +127,22 @@ def upload():
     task_text = request.form.get("task_text", "").strip()
     data.setdefault("users", {})
     data["users"].setdefault(str(user_id), {"created_at": datetime.now().isoformat()})
-    start_task_num = (
-        int(raw_num)
-        if raw_num.isdigit()
-        else get_next_task_number_for_user(data, user_id)
+    start_task_num = normalize_task_number(raw_num) or get_next_task_number_for_user(
+        data, user_id
     )
 
     uploaded_tasks = []
 
     for offset, file in enumerate(files):
-        task_num = start_task_num + offset
+        task_num = get_next_task_number(start_task_num, offset) if offset else start_task_num
         ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
         task_key = build_task_key(user_id, task_num)
-        filename = secure_filename(f"{task_num}_{user_id}.{ext}")
+        filename = secure_filename(f"{task_number_to_code(task_num)}_{user_id}.{ext}")
 
         old = get_task_file(task_num, user_id)
         if old:
             old.unlink()
-            logger.info(f"Перезаписан файл для задания U{user_id} #{task_num}")
+            logger.info(f"Перезаписан файл для задания №{task_num} User {user_id}")
 
         file.save(Config.UPLOAD_DIR / filename)
         logger.success(f"Файл {filename} успешно сохранен")
@@ -148,6 +151,7 @@ def upload():
             "task_key": task_key,
             "user_id": user_id,
             "task_number": task_num,
+            "task_code": task_number_to_code(task_num),
             "filename": filename,
             "created": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
             "answer_text": data["tasks"].get(task_key, {}).get("answer_text", ""),
@@ -188,11 +192,7 @@ def send_task_text():
         return jsonify({"ok": False, "error": "Текст пустой"}), 400
 
     data = load_data()
-    task_num = (
-        int(raw_num)
-        if raw_num.isdigit()
-        else get_next_task_number_for_user(data, user_id)
-    )
+    task_num = normalize_task_number(raw_num) or get_next_task_number_for_user(data, user_id)
     data.setdefault("users", {})
     data["users"].setdefault(str(user_id), {"created_at": datetime.now().isoformat()})
 
@@ -202,6 +202,7 @@ def send_task_text():
         "task_key": task_key,
         "user_id": user_id,
         "task_number": task_num,
+        "task_code": task_number_to_code(task_num),
         "filename": existing.get("filename", ""),
         "created": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
         "answer_text": existing.get("answer_text", ""),
@@ -271,7 +272,8 @@ def save_task_text():
     task_num = str(payload.get("task_number", ""))
     text = payload.get("text", "")
 
-    if not task_num.isdigit():
+    task_num = normalize_task_number(task_num)
+    if not task_num:
         return jsonify({"ok": False, "error": "Некорректный номер задания"}), 400
 
     data = load_data()
@@ -282,7 +284,7 @@ def save_task_text():
     if not save_task_answer(task_key, text):
         return jsonify({"ok": False, "error": "Задание не найдено"}), 404
 
-    logger.success(f"Сохранен ответ для задания U{user_id} #{task_num}: {text}")
+    logger.success(f"Сохранен ответ для задания №{task_num} User {user_id}: {text}")
     response = make_response(jsonify({"ok": True, "text": text}))
     return with_user_cookie(response, user_id, created)
 
@@ -290,22 +292,23 @@ def save_task_text():
 @main.route("/delete/<task>", methods=["POST"])
 def delete_task(task):
     user_id, created = get_current_user_id(create=True)
-    if not str(task).isdigit():
+    task = normalize_task_number(task)
+    if not task:
         return jsonify({"ok": False, "error": "Некорректный номер задания"}), 400
     data = load_data()
     task_key = build_task_key(user_id, task)
     if task_key not in data["tasks"]:
         return jsonify({"ok": False, "error": "Задание не найдено"}), 404
 
-    file_path = get_task_file(int(task), user_id)
+    file_path = get_task_file(task, user_id)
     if file_path and file_path.exists():
         file_path.unlink()
-        logger.info(f"Удален файл задания U{user_id} #{task}: {file_path.name}")
+        logger.info(f"Удален файл задания №{task} User {user_id}: {file_path.name}")
 
     data["tasks"].pop(task_key)
     save_data(data)
 
-    logger.success(f"Задание U{user_id} #{task} удалено")
+    logger.success(f"Задание №{task} User {user_id} удалено")
     response = make_response(jsonify({"ok": True}))
     return with_user_cookie(response, user_id, created)
 

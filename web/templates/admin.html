@@ -10,6 +10,17 @@
         />
     </head>
     <body class="admin_body">
+        <div class="admin_mobile_bar">
+            <button type="button" id="mobileListBtn" class="admin_mobile_btn active">
+                Список
+            </button>
+            <button type="button" id="mobileEditorBtn" class="admin_mobile_btn">
+                Редактор
+            </button>
+            <button type="button" id="mobileRefreshBtn" class="admin_mobile_btn">
+                Обновить
+            </button>
+        </div>
         <div class="admin_shell">
             <aside class="admin_sidebar">
                 <div class="admin_brand">
@@ -33,12 +44,17 @@
                 </div>
 
                 <div class="admin_filters">
-                    <input
-                        id="adminSearch"
-                        class="admin_search"
-                        type="text"
-                        placeholder="Поиск по user ID, номеру, тексту, ответу"
-                    />
+                    <div class="admin_search_row">
+                        <input
+                            id="adminSearch"
+                            class="admin_search"
+                            type="text"
+                            placeholder="Поиск по user ID, номеру, тексту, ответу"
+                        />
+                        <button type="button" id="clearFiltersBtn" class="admin_ghost_btn">
+                            Сбросить
+                        </button>
+                    </div>
                     <select id="adminUserFilter" class="admin_search">
                         <option value="">Все пользователи</option>
                     </select>
@@ -55,6 +71,7 @@
                     </div>
                 </div>
 
+                <div class="admin_list_meta" id="adminListMeta"></div>
                 <div class="admin_task_list" id="adminTaskList"></div>
             </aside>
 
@@ -77,8 +94,9 @@
                     <div class="admin_heading">
                         <div>
                             <div class="admin_heading_kicker">Задание</div>
-                            <h1 id="adminTaskTitle">#</h1>
+                            <h1 id="adminTaskTitle">№</h1>
                             <div class="admin_heading_user" id="adminTaskUser">Пользователь</div>
+                            <div class="admin_heading_tags" id="adminHeadingTags"></div>
                         </div>
                         <div class="admin_heading_meta">
                             <span id="adminTaskCreated"></span>
@@ -102,14 +120,7 @@
 
                         <div class="admin_card admin_card_text">
                             <div class="admin_card_title">Текст задания</div>
-                            <textarea
-                                id="adminTaskText"
-                                class="admin_textarea admin_textarea_large"
-                                placeholder="Здесь можно хранить условие, пояснения, заметки."
-                            ></textarea>
-                            <div class="admin_action_row">
-                                <button type="button" id="saveTaskTextBtn">Сохранить текст</button>
-                            </div>
+                            <div id="adminTaskText" class="admin_task_text_view"></div>
                         </div>
                     </div>
 
