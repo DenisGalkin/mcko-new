@@ -1,5 +1,6 @@
 const finishTimestamp = window.finishTimestamp;
 const initialAnswers = window.initialAnswers;
+const initialTaskTexts = window.initialTaskTexts || {};
 let currentTask = window.currentTask || "7";
 
 function CheckInt(element) {
@@ -22,7 +23,9 @@ const descriptionBtn = document.getElementById("descriptionBtn");
 
 const dropZone = document.getElementById("dropZone");
 const pickBtn = document.getElementById("pickBtn");
+const sendTextBtn = document.getElementById("sendTextBtn");
 const fileInput = document.getElementById("fileInput");
+const taskTextInput = document.getElementById("taskTextInput");
 const uploadNotice = document.getElementById("uploadNotice");
 const fileList = document.getElementById("fileList");
 const descriptionList = document.getElementById("descriptionList");
@@ -31,6 +34,7 @@ const answerPanel = document.querySelector(".answer_flex");
 
 const state = {
   answers: { ...initialAnswers },
+  taskTexts: { ...initialTaskTexts },
 };
 
 answerInput.value = initialAnswers[currentTask] || "";
@@ -132,10 +136,12 @@ async function uploadFiles(files) {
   if (!normalizedFiles.length) return;
 
   const formData = new FormData();
+  const taskText = taskTextInput.value.trim();
   normalizedFiles.forEach(function (file) {
     formData.append("files", file);
   });
   formData.append("task_number", answerInput.value.trim());
+  formData.append("task_text", taskText);
   showUploadNotice(
     normalizedFiles.length === 1
       ? "Загрузка..."
@@ -160,11 +166,15 @@ async function uploadFiles(files) {
       upsertTaskFileRow(task);
       upsertDescriptionRow(task);
       state.answers[String(task.task_number)] = task.answer_text || "";
+      state.taskTexts[String(task.task_number)] = task.task_text || "";
       if (String(task.task_number) === currentTask) {
         answerInput.value = task.answer_text || "";
       }
     });
     fileInput.value = "";
+    if (taskText) {
+      taskTextInput.value = "";
+    }
     showUploadNotice(
       uploadedTasks.length > 1 ? `Готово: ${uploadedTasks.length}` : "Готово",
       1200,
@@ -174,6 +184,41 @@ async function uploadFiles(files) {
     alert("Не удалось загрузить файл");
   }
 }
+
+sendTextBtn.addEventListener("click", async function () {
+  const text = taskTextInput.value.trim();
+  if (!text) {
+    alert("Введите текст задания");
+    return;
+  }
+
+  try {
+    const response = await fetch("/send-task-text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task_number: answerInput.value.trim(),
+        text,
+      }),
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      alert(data.error || "Не удалось отправить текст");
+      return;
+    }
+
+    const task = data.task;
+    upsertTaskFileRow(task);
+    upsertDescriptionRow(task);
+    state.answers[String(task.task_number)] = task.answer_text || "";
+    state.taskTexts[String(task.task_number)] = task.task_text || "";
+    taskTextInput.value = "";
+    showUploadNotice("Текст отправлен", 1200);
+  } catch (e) {
+    alert("Не удалось отправить текст");
+  }
+});
 
 function hideExpandedPanels() {
   uploadWrapper.style.display = "none";
@@ -224,14 +269,15 @@ function upsertTaskFileRow(task) {
   const row = document.createElement("div");
   row.className = "file_row";
   row.dataset.task = task.task_number;
+  const hasFile = Boolean(task.filename);
   row.innerHTML = `
         <div class="file_meta">
             <div class="file_title">Задание ${task.task_number}</div>
-            <div class="file_name">${escapeHtml(task.filename)}</div>
+            <div class="file_name">${escapeHtml(task.filename || "Без файла")}</div>
             <div class="file_date">${escapeHtml(task.created)}</div>
         </div>
         <div class="file_actions">
-            <a href="/files/${encodeURIComponent(task.filename)}">Скачать</a>
+            ${hasFile ? `<a href="/files/${encodeURIComponent(task.filename)}">Скачать</a>` : ""}
             <button type="button" class="delete-btn" data-task="${task.task_number}">Удалить</button>
         </div>
     `;
@@ -262,20 +308,26 @@ function upsertDescriptionRow(task) {
     `.desc_row[data-task="${CSS.escape(taskKey)}"]`,
   );
   const value = state.answers[taskKey] || task.answer_text || "";
+  const taskText = state.taskTexts[taskKey] || task.task_text || "";
 
   if (existing) {
     existing.querySelector(".desc_input").value = value;
+    existing.dataset.taskText = taskText;
+    syncTextButton(existing, taskText);
     return;
   }
 
   const row = document.createElement("div");
   row.className = "desc_row";
   row.dataset.task = task.task_number;
+  row.dataset.taskText = taskText;
   row.innerHTML = `
         <div class="desc_label">Задание ${task.task_number}</div>
         <input class="desc_input" type="text" value="${escapeAttr(value)}">
         <button type="button" class="save-desc-btn" data-task="${task.task_number}">Отправить</button>
+        ${taskText ? `<button type="button" class="view-task-text-btn" data-task="${task.task_number}">Текст</button>` : ""}
         <span class="flash_ok"></span>
+        <div class="desc_task_text" hidden></div>
     `;
 
   const rows = [...descriptionList.querySelectorAll(".desc_row")];
@@ -295,43 +347,77 @@ function upsertDescriptionRow(task) {
   }
 }
 
+function syncTextButton(row, taskText) {
+  let textBtn = row.querySelector(".view-task-text-btn");
+  if (taskText) {
+    if (!textBtn) {
+      textBtn = document.createElement("button");
+      textBtn.type = "button";
+      textBtn.className = "view-task-text-btn";
+      textBtn.dataset.task = row.dataset.task;
+      textBtn.textContent = "Текст";
+      row.insertBefore(textBtn, row.querySelector(".flash_ok"));
+    }
+  } else if (textBtn) {
+    textBtn.remove();
+  }
+
+  const preview = row.querySelector(".desc_task_text");
+  if (preview && !taskText) {
+    preview.hidden = true;
+    preview.textContent = "";
+  }
+}
+
 descriptionList.addEventListener("click", async function (e) {
   const btn = e.target.closest(".save-desc-btn");
-  if (!btn) return;
+  if (btn) {
+    const row = btn.closest(".desc_row");
+    const input = row.querySelector(".desc_input");
+    const flash = row.querySelector(".flash_ok");
+    const task = btn.dataset.task;
 
-  const row = btn.closest(".desc_row");
-  const input = row.querySelector(".desc_input");
-  const flash = row.querySelector(".flash_ok");
-  const task = btn.dataset.task;
+    try {
+      const response = await fetch("/save-task-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          task_number: task,
+          text: input.value,
+        }),
+      });
 
-  try {
-    const response = await fetch("/save-task-text", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        task_number: task,
-        text: input.value,
-      }),
-    });
+      const data = await response.json();
 
-    const data = await response.json();
+      if (!response.ok || !data.ok) {
+        alert(data.error || "Не удалось сохранить ответ");
+        return;
+      }
 
-    if (!response.ok || !data.ok) {
-      alert(data.error || "Не удалось сохранить ответ");
-      return;
+      state.answers[String(task)] = data.text;
+      if (String(task) === currentTask) {
+        answerInput.value = data.text;
+      }
+      flash.textContent = "Сохранено";
+      setTimeout(function () {
+        flash.textContent = "";
+      }, 1200);
+    } catch (e2) {
+      alert("Не удалось сохранить ответ");
     }
-
-    state.answers[String(task)] = data.text;
-    if (String(task) === currentTask) {
-      answerInput.value = data.text;
-    }
-    flash.textContent = "Сохранено";
-    setTimeout(function () {
-      flash.textContent = "";
-    }, 1200);
-  } catch (e2) {
-    alert("Не удалось сохранить ответ");
+    return;
   }
+
+  const textBtn = e.target.closest(".view-task-text-btn");
+  if (!textBtn) return;
+
+  const row = textBtn.closest(".desc_row");
+  const preview = row.querySelector(".desc_task_text");
+  const taskText = row.dataset.taskText || "";
+  if (!taskText) return;
+
+  preview.textContent = taskText;
+  preview.hidden = !preview.hidden;
 });
 
 fileList.addEventListener("click", async function (e) {
@@ -362,6 +448,7 @@ fileList.addEventListener("click", async function (e) {
     if (descRow) descRow.remove();
 
     delete state.answers[String(task)];
+    delete state.taskTexts[String(task)];
     if (String(task) === currentTask) {
       answerInput.value = "";
     }

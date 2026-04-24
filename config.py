@@ -21,10 +21,12 @@ class Config:
     DATA_FILE = BASE_DIR / "data.json"
 
     BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+    BOT_HOST = os.getenv("BOT_HOST", "localhost")
+    WEB_HOST = os.getenv("WEB_HOST", "localhost")
     WEB_PORT = int(os.getenv("WEB_PORT", 1000))
     BOT_PORT = int(os.getenv("BOT_INTERNAL_PORT", 1001))
-    BOT_URL = f"http://bot:{BOT_PORT}/notify"
-    WEB_URL = f"http://web:{WEB_PORT}"
+    BOT_URL = os.getenv("BOT_URL", f"http://{BOT_HOST}:{BOT_PORT}/notify")
+    WEB_URL = os.getenv("WEB_URL", f"http://{WEB_HOST}:{WEB_PORT}")
 
     TEST_DURATION = 44
 

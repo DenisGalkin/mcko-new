@@ -3,6 +3,9 @@ services:
     build: .
     command: gunicorn --bind 0.0.0.0:1000 --workers 1 --threads 4 app:app
     env_file: .env
+    environment:
+      BOT_HOST: bot
+      WEB_HOST: web
     volumes:
       - ./uploads:/app/uploads
       - ./data.json:/app/data.json
@@ -13,6 +16,9 @@ services:
     build: .
     command: python bot.py
     env_file: .env
+    environment:
+      BOT_HOST: bot
+      WEB_HOST: web
     volumes:
       - ./uploads:/app/uploads
       - ./data.json:/app/data.json

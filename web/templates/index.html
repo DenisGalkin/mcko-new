@@ -141,6 +141,7 @@
                         <div
                             class="desc_row"
                             data-task="{{ task.task_number }}"
+                            data-task-text="{{ task.task_text|e }}"
                         >
                             <div class="desc_label">
                                 Задание {{ task.task_number }}
@@ -157,7 +158,17 @@
                             >
                                 Отправить
                             </button>
+                            {% if task.task_text %}
+                            <button
+                                type="button"
+                                class="view-task-text-btn"
+                                data-task="{{ task.task_number }}"
+                            >
+                                Текст
+                            </button>
+                            {% endif %}
                             <span class="flash_ok"></span>
+                            <div class="desc_task_text" hidden></div>
                         </div>
                         {% endfor %} {% else %}
                         <div class="empty_files" id="emptyDescription">
@@ -179,6 +190,16 @@
                         <div class="upload_text">
                             Перетащите фото сюда, вставьте его или выберите
                             несколько файлов через проводник
+                        </div>
+                        <div class="upload_text_compact">
+                            <textarea
+                                id="taskTextInput"
+                                class="upload_textarea"
+                                placeholder="Текст к заданию. Можно отправить отдельно или вместе с файлом."
+                            ></textarea>
+                            <button type="button" id="sendTextBtn">
+                                Отправить
+                            </button>
                         </div>
                         <button type="button" id="pickBtn">Выбрать файлы</button>
                         <input type="file" id="fileInput" hidden multiple accept="image/*" />
@@ -207,13 +228,17 @@
                                 <div class="file_title">
                                     Задание {{ task.task_number }}
                                 </div>
-                                <div class="file_name">{{ task.filename }}</div>
+                                <div class="file_name">
+                                    {{ task.filename or 'Без файла' }}
+                                </div>
                                 <div class="file_date">{{ task.created }}</div>
                             </div>
                             <div class="file_actions">
+                                {% if task.filename %}
                                 <a href="/files/{{ task.filename|urlencode }}"
                                     >Скачать</a
                                 >
+                                {% endif %}
                                 <button
                                     type="button"
                                     class="delete-btn"
@@ -253,6 +278,7 @@
         <script>
             window.finishTimestamp = {{ finish_ts }};
             window.initialAnswers = {{ answers_map|tojson }};
+            window.initialTaskTexts = {{ task_texts_map|tojson }};
             window.currentTask = '7';
         </script>
         <script src="{{ url_for('static', filename='script.js') }}"></script>

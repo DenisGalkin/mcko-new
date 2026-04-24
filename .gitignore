@@ -1,0 +1,13 @@
+.env
+.codex
+__pycache__/app.cpython-312.pyc
+__pycache__/bot.cpython-312.pyc
+__pycache__/config.cpython-312.pyc
+shared/__pycache__/__init__.cpython-312.pyc
+shared/__pycache__/manager.cpython-312.pyc
+bot/__pycache__/server.cpython-312.pyc
+bot/__pycache__/__init__.cpython-312.pyc
+bot/__pycache__/handlers.cpython-312.pyc
+logs/app.log
+web/__pycache__/routes.cpython-312.pyc
+web/__pycache__/__init__.cpython-312.pyc

@@ -5,7 +5,13 @@ from flask import Blueprint, jsonify, render_template, request, send_from_direct
 from werkzeug.utils import secure_filename
 
 from config import Config, logger
-from shared.manager import cleanup_data, get_task_file, load_data, save_data
+from shared.manager import (
+    cleanup_data,
+    get_task_file,
+    load_data,
+    save_data,
+    save_task_description,
+)
 
 main = Blueprint("main", __name__)
 START_TIME = datetime.now()
@@ -19,9 +25,23 @@ def index():
         data["tasks"][k] for k in sorted(data["tasks"].keys(), key=lambda x: int(x))
     ]
     answers_map = {k: v.get("answer_text", "") for k, v in data["tasks"].items()}
+    task_texts_map = {k: v.get("task_text", "") for k, v in data["tasks"].items()}
     return render_template(
-        "index.html", tasks=tasks, finish_ts=finish_ts, answers_map=answers_map
+        "index.html",
+        tasks=tasks,
+        finish_ts=finish_ts,
+        answers_map=answers_map,
+        task_texts_map=task_texts_map,
     )
+
+
+@main.route("/admin")
+def admin():
+    data = cleanup_data()
+    tasks = [
+        data["tasks"][k] for k in sorted(data["tasks"].keys(), key=lambda x: int(x))
+    ]
+    return render_template("admin.html", tasks=tasks)
 
 
 @main.route("/upload", methods=["POST"])
@@ -39,6 +59,7 @@ def upload():
 
     data = load_data()
     raw_num = request.form.get("task_number", "").strip()
+    task_text = request.form.get("task_text", "").strip()
     start_task_num = (
         int(raw_num)
         if raw_num.isdigit()
@@ -65,6 +86,7 @@ def upload():
             "filename": filename,
             "created": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
             "answer_text": data["tasks"].get(str(task_num), {}).get("answer_text", ""),
+            "task_text": task_text or data["tasks"].get(str(task_num), {}).get("task_text", ""),
         }
 
         data["tasks"][str(task_num)] = task_info
@@ -79,6 +101,7 @@ def upload():
                 json={
                     "task_number": task_info["task_number"],
                     "filename": task_info["filename"],
+                    "task_text": task_info.get("task_text", ""),
                 },
                 timeout=2,
             )
@@ -97,6 +120,86 @@ def upload():
             "tasks": uploaded_tasks,
         }
     )
+
+
+@main.route("/send-task-text", methods=["POST"])
+def send_task_text():
+    payload = request.get_json(silent=True)
+    if not payload:
+        return jsonify({"ok": False, "error": "Пустой запрос"}), 400
+
+    text = str(payload.get("text", "")).strip()
+    raw_num = str(payload.get("task_number", "")).strip()
+
+    if not text:
+        return jsonify({"ok": False, "error": "Текст пустой"}), 400
+
+    data = load_data()
+    task_num = (
+        int(raw_num)
+        if raw_num.isdigit()
+        else (max([int(k) for k in data["tasks"]] or [0]) + 1)
+    )
+
+    existing = data["tasks"].get(str(task_num), {})
+    task_info = {
+        "task_number": task_num,
+        "filename": existing.get("filename", ""),
+        "created": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+        "answer_text": existing.get("answer_text", ""),
+        "task_text": text,
+    }
+    data["tasks"][str(task_num)] = task_info
+    save_data(data)
+
+    try:
+        resp = requests.post(
+            Config.BOT_URL,
+            json={
+                "task_number": task_info["task_number"],
+                "filename": task_info["filename"],
+                "task_text": task_info["task_text"],
+            },
+            timeout=2,
+        )
+        logger.info(f"Текстовое задание #{task_num} отправлено в бота: {resp.status_code}")
+    except Exception as e:
+        logger.error(f"Не удалось уведомить бота по текстовому заданию #{task_num}: {e}")
+
+    return jsonify({"ok": True, "task": task_info})
+
+
+@main.route("/api/tasks")
+def api_tasks():
+    data = cleanup_data()
+    tasks = [
+        data["tasks"][k] for k in sorted(data["tasks"].keys(), key=lambda x: int(x))
+    ]
+    return jsonify({"ok": True, "tasks": tasks})
+
+
+@main.route("/api/tasks/<task>", methods=["PATCH"])
+def update_task(task):
+    if not task.isdigit():
+        return jsonify({"ok": False, "error": "Некорректный номер задания"}), 400
+
+    payload = request.get_json(silent=True)
+    if not payload:
+        return jsonify({"ok": False, "error": "Пустой запрос"}), 400
+
+    data = load_data()
+    task_info = data["tasks"].get(task)
+    if not task_info:
+        return jsonify({"ok": False, "error": "Задание не найдено"}), 404
+
+    if "answer_text" in payload:
+        task_info["answer_text"] = str(payload.get("answer_text", ""))
+    if "task_text" in payload:
+        task_info["task_text"] = str(payload.get("task_text", ""))
+
+    save_data(data)
+    logger.success(f"Обновлено задание #{task}")
+    return jsonify({"ok": True, "task": task_info})
 
 
 @main.route("/files/<path:filename>")
@@ -121,10 +224,10 @@ def save_task_text():
     if task_num not in data["tasks"]:
         return jsonify({"ok": False, "error": "Задание не найдено"}), 404
 
-    data["tasks"][task_num]["answer_text"] = text
-    save_data(data)
+    if not save_task_description(task_num, text):
+        return jsonify({"ok": False, "error": "Задание не найдено"}), 404
 
-    logger.success(f"Сохранен ответ для задания #{task_num}: {text}")
+    logger.success(f"Сохранено описание для задания #{task_num}: {text}")
     return jsonify({"ok": True, "text": text})
 
 
@@ -165,8 +268,11 @@ def reset_timer():
 def delete_all():
     data = load_data()
     for task_info in data.get("tasks", {}).values():
-        file_path = Config.UPLOAD_DIR / task_info["filename"]
-        if file_path.exists():
+        filename = task_info.get("filename", "")
+        if not filename:
+            continue
+        file_path = Config.UPLOAD_DIR / filename
+        if file_path.exists() and file_path.is_file():
             file_path.unlink()
             logger.info(f"Удален файл: {task_info['filename']}")
     data["tasks"] = {}

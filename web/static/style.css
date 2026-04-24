@@ -173,6 +173,29 @@ div.answer {
     box-sizing: border-box;
 }
 
+.upload_text_compact {
+    width: 100%;
+    max-width: 760px;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    margin: 8px 0 12px;
+}
+
+.upload_textarea {
+    flex: 1;
+    min-height: 86px;
+    max-height: 120px;
+    resize: vertical;
+    border: 1px solid #b8b8b8;
+    padding: 8px 10px;
+    font-size: 16px;
+    line-height: 1.35;
+    color: #333333;
+    background: #ffffff;
+    box-sizing: border-box;
+}
+
 .upload_drop.over {
     background: #ececec;
     border-color: #aaaaaa;
@@ -282,6 +305,7 @@ div.answer {
     padding: 10px;
     margin-bottom: 10px;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
 }
@@ -306,6 +330,18 @@ div.answer {
     font-size: 16px;
 }
 
+.desc_task_text {
+    width: 100%;
+    margin-top: 4px;
+    padding: 8px 10px;
+    border: 1px solid #ccd5d5;
+    background: #ffffff;
+    color: #222244;
+    font-size: 16px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+}
+
 #footer_fake {
     color: #cccccc;
     font-size: 8pt;
@@ -313,4 +349,329 @@ div.answer {
 
 .clear {
     clear: both;
+}
+
+.admin_body {
+    min-width: 0;
+    background: #eef3f7;
+    background-image: linear-gradient(180deg, #f8fbfd 0%, #edf2f6 100%);
+}
+
+.admin_shell {
+    display: grid;
+    grid-template-columns: 340px minmax(0, 1fr);
+    min-height: 100vh;
+}
+
+.admin_sidebar {
+    background: #f8fafc;
+    border-right: 1px solid #d5dde6;
+    padding: 20px 16px;
+    box-sizing: border-box;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: auto;
+}
+
+.admin_brand {
+    margin-bottom: 18px;
+}
+
+.admin_title {
+    font-size: 30px;
+    color: #12324a;
+    margin-bottom: 6px;
+}
+
+.admin_back {
+    font-size: 16px;
+    color: #355f88;
+    text-decoration: none;
+}
+
+.admin_stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.admin_stat {
+    border: 1px solid #d8e1eb;
+    background: #ffffff;
+    padding: 10px;
+}
+
+.admin_stat span {
+    display: block;
+    color: #6d7f92;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.admin_stat strong {
+    color: #15324c;
+    font-size: 24px;
+}
+
+.admin_filters {
+    margin-bottom: 16px;
+}
+
+.admin_search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid #c8d4df;
+    margin-bottom: 8px;
+    font-size: 16px;
+}
+
+.admin_filter_row {
+    display: flex;
+    gap: 8px;
+}
+
+.admin_filter_btn {
+    flex: 1;
+    font-size: 15px;
+    padding: 8px 10px;
+}
+
+.admin_filter_btn.active {
+    background: #dcecff;
+    border-color: #6d97c0;
+}
+
+.admin_task_list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin_task_item {
+    text-align: left;
+    background: #ffffff;
+    border: 1px solid #d8e1eb;
+    padding: 12px;
+    display: block;
+}
+
+.admin_task_item.active {
+    border-color: #5d89b5;
+    background: #eaf3ff;
+}
+
+.admin_task_item.is-solved .admin_task_state {
+    color: #19703d;
+}
+
+.admin_task_num {
+    display: block;
+    color: #12324a;
+    font-size: 24px;
+    margin-bottom: 4px;
+}
+
+.admin_task_name {
+    display: block;
+    color: #394b5b;
+    font-size: 15px;
+    margin-bottom: 4px;
+    word-break: break-all;
+}
+
+.admin_task_state {
+    display: block;
+    color: #8a5562;
+    font-size: 14px;
+}
+
+.admin_list_empty {
+    border: 1px solid #d8e1eb;
+    background: #ffffff;
+    padding: 14px;
+    color: #607486;
+}
+
+.admin_main {
+    padding: 22px;
+    box-sizing: border-box;
+}
+
+.admin_toolbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.admin_toolbar_left,
+.admin_toolbar_right,
+.admin_action_row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.admin_empty {
+    border: 1px dashed #bfcddb;
+    background: #ffffff;
+    padding: 24px;
+    color: #607486;
+}
+
+.admin_editor {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.admin_heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.admin_heading_kicker {
+    font-size: 14px;
+    color: #667b8e;
+    margin-bottom: 4px;
+}
+
+.admin_heading h1 {
+    font-size: 42px;
+    color: #0f2d46;
+}
+
+.admin_heading_meta {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    color: #5d7185;
+    font-size: 15px;
+}
+
+.admin_status_chip {
+    background: #fff0f0;
+    color: #8b4951;
+    border: 1px solid #efc9cf;
+    padding: 6px 10px;
+    font-size: 14px;
+}
+
+.admin_status_chip.is-solved {
+    background: #ebfff2;
+    color: #1d7440;
+    border-color: #b8dfc4;
+}
+
+.admin_grid {
+    display: grid;
+    grid-template-columns: minmax(300px, 520px) minmax(0, 1fr);
+    gap: 16px;
+}
+
+.admin_card {
+    background: #ffffff;
+    border: 1px solid #d8e1eb;
+    padding: 16px;
+}
+
+.admin_card_title {
+    font-size: 22px;
+    color: #163550;
+    margin-bottom: 12px;
+}
+
+.admin_preview_wrap {
+    min-height: 280px;
+    background: #f4f8fb;
+    border: 1px solid #dbe4ec;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.admin_preview_image {
+    max-width: 100%;
+    max-height: 560px;
+    display: block;
+}
+
+.admin_preview_empty {
+    color: #6b7e90;
+    font-size: 16px;
+    line-height: 1.4;
+}
+
+.admin_file_meta {
+    margin-top: 10px;
+}
+
+.admin_file_actions {
+    margin-top: 8px;
+}
+
+.admin_file_actions a {
+    font-size: 16px;
+    color: #315f8f;
+    text-decoration: none;
+}
+
+.admin_textarea {
+    width: 100%;
+    min-height: 140px;
+    border: 1px solid #c8d4df;
+    padding: 12px;
+    box-sizing: border-box;
+    resize: vertical;
+    font-size: 17px;
+    line-height: 1.45;
+}
+
+.admin_textarea_large {
+    min-height: 360px;
+}
+
+.admin_danger {
+    background: #fff0f1;
+    border-color: #cc7d87;
+}
+
+.admin_flash {
+    min-height: 22px;
+    color: #1f6c3f;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.admin_flash.visible {
+    opacity: 1;
+}
+
+.admin_flash.is-error {
+    color: #a13f4f;
+}
+
+@media (max-width: 1100px) {
+    .admin_shell {
+        grid-template-columns: 1fr;
+    }
+
+    .admin_sidebar {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid #d5dde6;
+    }
+
+    .admin_grid {
+        grid-template-columns: 1fr;
+    }
 }

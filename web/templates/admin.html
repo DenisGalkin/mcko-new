@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru" translate="no" class="notranslate">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Admin | Задания</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', filename='style.css') }}"
+        />
+    </head>
+    <body class="admin_body">
+        <div class="admin_shell">
+            <aside class="admin_sidebar">
+                <div class="admin_brand">
+                    <div class="admin_title">Панель заданий</div>
+                    <a class="admin_back" href="/">Открыть основной сайт</a>
+                </div>
+
+                <div class="admin_stats" id="adminStats">
+                    <div class="admin_stat">
+                        <span>Всего</span>
+                        <strong id="statTotal">0</strong>
+                    </div>
+                    <div class="admin_stat">
+                        <span>С ответом</span>
+                        <strong id="statSolved">0</strong>
+                    </div>
+                    <div class="admin_stat">
+                        <span>Без ответа</span>
+                        <strong id="statOpen">0</strong>
+                    </div>
+                </div>
+
+                <div class="admin_filters">
+                    <input
+                        id="adminSearch"
+                        class="admin_search"
+                        type="text"
+                        placeholder="Поиск по номеру, тексту, ответу"
+                    />
+                    <div class="admin_filter_row">
+                        <button type="button" class="admin_filter_btn active" data-filter="all">
+                            Все
+                        </button>
+                        <button type="button" class="admin_filter_btn" data-filter="open">
+                            Без ответа
+                        </button>
+                        <button type="button" class="admin_filter_btn" data-filter="solved">
+                            С ответом
+                        </button>
+                    </div>
+                </div>
+
+                <div class="admin_task_list" id="adminTaskList"></div>
+            </aside>
+
+            <main class="admin_main">
+                <div class="admin_toolbar">
+                    <div class="admin_toolbar_left">
+                        <button type="button" id="prevTaskBtn">Предыдущее</button>
+                        <button type="button" id="nextTaskBtn">Следующее</button>
+                    </div>
+                    <div class="admin_toolbar_right">
+                        <button type="button" id="refreshTasksBtn">Обновить</button>
+                    </div>
+                </div>
+
+                <section class="admin_empty" id="adminEmpty">
+                    Заданий пока нет.
+                </section>
+
+                <section class="admin_editor" id="adminEditor" hidden>
+                    <div class="admin_heading">
+                        <div>
+                            <div class="admin_heading_kicker">Задание</div>
+                            <h1 id="adminTaskTitle">#</h1>
+                        </div>
+                        <div class="admin_heading_meta">
+                            <span id="adminTaskCreated"></span>
+                            <span id="adminTaskStatus" class="admin_status_chip"></span>
+                        </div>
+                    </div>
+
+                    <div class="admin_grid">
+                        <div class="admin_card admin_card_preview">
+                            <div class="admin_card_title">Файл</div>
+                            <div class="admin_preview_wrap" id="adminPreviewWrap"></div>
+                            <div class="admin_file_meta">
+                                <div id="adminFilename">Без файла</div>
+                                <div class="admin_file_actions">
+                                    <a id="adminDownloadLink" href="#" target="_blank" rel="noreferrer" hidden>
+                                        Открыть файл
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="admin_card admin_card_text">
+                            <div class="admin_card_title">Текст задания</div>
+                            <textarea
+                                id="adminTaskText"
+                                class="admin_textarea admin_textarea_large"
+                                placeholder="Здесь можно хранить условие, пояснения, заметки."
+                            ></textarea>
+                            <div class="admin_action_row">
+                                <button type="button" id="saveTaskTextBtn">Сохранить текст</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="admin_card">
+                        <div class="admin_card_title">Ответ</div>
+                        <textarea
+                            id="adminAnswerText"
+                            class="admin_textarea"
+                            placeholder="Введите или отредактируйте ответ"
+                        ></textarea>
+                        <div class="admin_action_row">
+                            <button type="button" id="saveAnswerBtnAdmin">Сохранить ответ</button>
+                            <button type="button" id="clearAnswerBtn">Очистить ответ</button>
+                            <button type="button" id="deleteTaskBtn" class="admin_danger">
+                                Удалить задание
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="admin_flash" id="adminFlash" aria-live="polite"></div>
+                </section>
+            </main>
+        </div>
+
+        <script>
+            window.adminInitialTasks = {{ tasks|tojson }};
+        </script>
+        <script src="{{ url_for('static', filename='admin.js') }}"></script>
+    </body>
+</html>
