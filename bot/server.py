@@ -7,42 +7,44 @@ from aiohttp import web
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import Config, logger
-from shared.manager import load_data, merge_telegram_message_map
+from shared.manager import build_task_key, load_data, merge_telegram_message_map
 
 
-def build_notification_keyboard(task_number):
+def build_notification_keyboard(user_id, task_number):
     builder = InlineKeyboardBuilder()
+    task_ref = f"{user_id}_{task_number}"
     builder.row(
         InlineKeyboardButton(
-            text="📝 Ответ", callback_data=f"task:answer:{task_number}"
+            text="📝 Ответ", callback_data=f"task:answer:{task_ref}"
         ),
     )
     builder.row(
         InlineKeyboardButton(
-            text="📎 Получить файл", callback_data=f"task:file:{task_number}"
+            text="📎 Получить файл", callback_data=f"task:file:{task_ref}"
         ),
         InlineKeyboardButton(
-            text="🧾 Текст", callback_data=f"task:text:{task_number}"
+            text="🧾 Текст", callback_data=f"task:text:{task_ref}"
         ),
     )
     builder.row(
         InlineKeyboardButton(
-            text="📂 Открыть карточку", callback_data=f"task:view:{task_number}"
+            text="📂 Открыть карточку", callback_data=f"task:view:{task_ref}"
         )
     )
     return builder.as_markup()
 
 
-async def notify_subscribers(bot: Bot, task_number, filename, task_text=""):
+async def notify_subscribers(bot: Bot, task_key, user_id, task_number, filename, task_text=""):
     task_text = (task_text or "").strip()
     path = Config.UPLOAD_DIR / filename if filename else None
     count = 0
     message_map_updates = {}
+    task_label = f"U{user_id} • #{task_number}"
 
     for chat_id in load_data().get("telegram_subscribers", {}):
         try:
             if path and path.exists():
-                caption = [f"📑 Новое задание #{task_number}"]
+                caption = [f"📑 Новое задание {task_label}"]
                 if task_text:
                     caption.append("К заданию прикреплен текст. Нажмите '🧾 Текст'.")
                 caption.append(
@@ -52,10 +54,10 @@ async def notify_subscribers(bot: Bot, task_number, filename, task_text=""):
                     chat_id,
                     FSInputFile(path),
                     caption="\n\n".join(caption),
-                    reply_markup=build_notification_keyboard(task_number),
+                    reply_markup=build_notification_keyboard(user_id, task_number),
                 )
             else:
-                body = [f"🧾 Новое текстовое задание #{task_number}"]
+                body = [f"🧾 Новое текстовое задание {task_label}"]
                 if task_text:
                     body.append(task_text)
                 body.append(
@@ -64,10 +66,12 @@ async def notify_subscribers(bot: Bot, task_number, filename, task_text=""):
                 msg = await bot.send_message(
                     chat_id,
                     "\n\n".join(body),
-                    reply_markup=build_notification_keyboard(task_number),
+                    reply_markup=build_notification_keyboard(user_id, task_number),
                 )
             message_map_updates[f"{chat_id}:{msg.message_id}"] = {
+                "task_key": task_key,
                 "task_number": task_number,
+                "user_id": user_id,
                 "at": datetime.now().isoformat(),
             }
             count += 1
@@ -85,10 +89,14 @@ async def start_bot_server(bot: Bot, dp: Dispatcher):
         try:
             payload = await request.json()
             logger.info(f"Получено уведомление от Web: {payload}")
+            user_id = int(payload["user_id"])
+            task_number = int(payload["task_number"])
             asyncio.create_task(
                 notify_subscribers(
                     bot,
-                    payload["task_number"],
+                    payload.get("task_key", build_task_key(user_id, task_number)),
+                    user_id,
+                    task_number,
                     payload.get("filename", ""),
                     payload.get("task_text", ""),
                 )

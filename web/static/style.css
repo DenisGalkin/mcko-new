@@ -207,6 +207,15 @@ div.answer {
     margin-bottom: 8px;
 }
 
+.upload_user_badge {
+    margin-bottom: 10px;
+    padding: 4px 10px;
+    border: 1px solid #bfc9d4;
+    background: #ffffff;
+    color: #34506b;
+    font-size: 15px;
+}
+
 .upload_notice {
     min-height: 18px;
     margin-top: 8px;
@@ -544,6 +553,12 @@ div.answer {
 .admin_heading h1 {
     font-size: 42px;
     color: #0f2d46;
+}
+
+.admin_heading_user {
+    margin-top: 6px;
+    color: #456580;
+    font-size: 18px;
 }
 
 .admin_heading_meta {

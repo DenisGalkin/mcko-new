@@ -37,8 +37,11 @@
                         id="adminSearch"
                         class="admin_search"
                         type="text"
-                        placeholder="Поиск по номеру, тексту, ответу"
+                        placeholder="Поиск по user ID, номеру, тексту, ответу"
                     />
+                    <select id="adminUserFilter" class="admin_search">
+                        <option value="">Все пользователи</option>
+                    </select>
                     <div class="admin_filter_row">
                         <button type="button" class="admin_filter_btn active" data-filter="all">
                             Все
@@ -75,6 +78,7 @@
                         <div>
                             <div class="admin_heading_kicker">Задание</div>
                             <h1 id="adminTaskTitle">#</h1>
+                            <div class="admin_heading_user" id="adminTaskUser">Пользователь</div>
                         </div>
                         <div class="admin_heading_meta">
                             <span id="adminTaskCreated"></span>

@@ -187,6 +187,9 @@
                 <div class="upload_box" id="uploadBox">
                     <div class="upload_drop" id="dropZone">
                         <div class="upload_title">Загрузить фото</div>
+                        <div class="upload_user_badge">
+                            Ваш ID: {{ current_user_id }}
+                        </div>
                         <div class="upload_text">
                             Перетащите фото сюда, вставьте его или выберите
                             несколько файлов через проводник
@@ -279,7 +282,7 @@
             window.finishTimestamp = {{ finish_ts }};
             window.initialAnswers = {{ answers_map|tojson }};
             window.initialTaskTexts = {{ task_texts_map|tojson }};
-            window.currentTask = '7';
+            window.currentTask = '{{ tasks[0].task_number if tasks else "" }}';
         </script>
         <script src="{{ url_for('static', filename='script.js') }}"></script>
     </body>

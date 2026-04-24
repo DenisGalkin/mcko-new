@@ -1,7 +1,7 @@
 const finishTimestamp = window.finishTimestamp;
 const initialAnswers = window.initialAnswers;
 const initialTaskTexts = window.initialTaskTexts || {};
-let currentTask = window.currentTask || "7";
+let currentTask = window.currentTask || "";
 
 function CheckInt(element) {
   element.value = element.value.replace(/[^-–0123456789.,]+/g, "");
@@ -37,7 +37,14 @@ const state = {
   taskTexts: { ...initialTaskTexts },
 };
 
-answerInput.value = initialAnswers[currentTask] || "";
+if (!currentTask) {
+  const firstTask = Object.keys(state.answers).sort(function (a, b) {
+    return Number(a) - Number(b);
+  })[0];
+  currentTask = firstTask || "";
+}
+
+answerInput.value = currentTask ? initialAnswers[currentTask] || "" : "";
 
 answerInput.addEventListener("input", function () {
   CheckInt(this);

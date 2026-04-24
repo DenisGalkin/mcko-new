@@ -2,9 +2,11 @@ const initialTasks = window.adminInitialTasks || [];
 
 const adminTaskList = document.getElementById("adminTaskList");
 const adminSearch = document.getElementById("adminSearch");
+const adminUserFilter = document.getElementById("adminUserFilter");
 const adminEditor = document.getElementById("adminEditor");
 const adminEmpty = document.getElementById("adminEmpty");
 const adminTaskTitle = document.getElementById("adminTaskTitle");
+const adminTaskUser = document.getElementById("adminTaskUser");
 const adminTaskCreated = document.getElementById("adminTaskCreated");
 const adminTaskStatus = document.getElementById("adminTaskStatus");
 const adminFilename = document.getElementById("adminFilename");
@@ -27,9 +29,10 @@ const filterButtons = [...document.querySelectorAll(".admin_filter_btn")];
 
 const state = {
   tasks: normalizeTasks(initialTasks),
-  selectedTaskId: null,
+  selectedTaskKey: null,
   filter: "all",
   query: "",
+  userFilter: "",
 };
 
 function normalizeTasks(tasks) {
@@ -37,6 +40,8 @@ function normalizeTasks(tasks) {
     .map((task) => ({
       ...task,
       task_number: Number(task.task_number),
+      user_id: Number(task.user_id || 0),
+      task_key: task.task_key || `${task.user_id || 0}:${task.task_number}`,
       answer_text: task.answer_text || "",
       task_text: task.task_text || "",
       filename: task.filename || "",
@@ -50,9 +55,12 @@ function getFilteredTasks() {
     const answer = task.answer_text.trim();
     if (state.filter === "open" && answer) return false;
     if (state.filter === "solved" && !answer) return false;
+    if (state.userFilter && String(task.user_id) !== state.userFilter) return false;
 
     if (!state.query) return true;
     const haystack = [
+      `u${task.user_id}`,
+      String(task.user_id),
       String(task.task_number),
       task.filename,
       task.created,
@@ -71,6 +79,23 @@ function renderStats() {
   statOpen.textContent = state.tasks.filter((task) => !task.answer_text.trim()).length;
 }
 
+function renderUserFilter() {
+  const users = [...new Set(state.tasks.map((task) => String(task.user_id)))].sort(
+    (a, b) => Number(a) - Number(b),
+  );
+  const currentValue = state.userFilter;
+  adminUserFilter.innerHTML = '<option value="">Все пользователи</option>';
+  users.forEach((userId) => {
+    const option = document.createElement("option");
+    option.value = userId;
+    option.textContent = `Пользователь ${userId}`;
+    if (userId === currentValue) {
+      option.selected = true;
+    }
+    adminUserFilter.appendChild(option);
+  });
+}
+
 function renderTaskList() {
   const filtered = getFilteredTasks();
   adminTaskList.innerHTML = "";
@@ -82,15 +107,15 @@ function renderTaskList() {
     return;
   }
 
-  if (!filtered.some((task) => task.task_number === state.selectedTaskId)) {
-    state.selectedTaskId = filtered[0].task_number;
+  if (!filtered.some((task) => task.task_key === state.selectedTaskKey)) {
+    state.selectedTaskKey = filtered[0].task_key;
   }
 
   filtered.forEach((task) => {
     const item = document.createElement("button");
     item.type = "button";
     item.className = "admin_task_item";
-    if (task.task_number === state.selectedTaskId) {
+    if (task.task_key === state.selectedTaskKey) {
       item.classList.add("active");
     }
     if (task.answer_text.trim()) {
@@ -98,19 +123,19 @@ function renderTaskList() {
     }
     item.dataset.task = task.task_number;
     item.innerHTML = `
-      <span class="admin_task_num">#${task.task_number}</span>
+      <span class="admin_task_num">U${task.user_id} • #${task.task_number}</span>
       <span class="admin_task_name">${escapeHtml(task.filename || "Без файла")}</span>
       <span class="admin_task_state">${task.answer_text.trim() ? "Есть ответ" : "Без ответа"}</span>
     `;
     item.addEventListener("click", () => {
-      state.selectedTaskId = task.task_number;
+      state.selectedTaskKey = task.task_key;
       renderTaskList();
       renderEditor(task);
     });
     adminTaskList.appendChild(item);
   });
 
-  renderEditor(filtered.find((task) => task.task_number === state.selectedTaskId) || null);
+  renderEditor(filtered.find((task) => task.task_key === state.selectedTaskKey) || null);
 }
 
 function renderEditor(task) {
@@ -124,6 +149,7 @@ function renderEditor(task) {
   adminEmpty.hidden = true;
 
   adminTaskTitle.textContent = `#${task.task_number}`;
+  adminTaskUser.textContent = `Пользователь ${task.user_id}`;
   adminTaskCreated.textContent = task.created ? `Создано: ${task.created}` : "";
   adminTaskStatus.textContent = task.answer_text.trim() ? "Ответ сохранен" : "Без ответа";
   adminTaskStatus.classList.toggle("is-solved", Boolean(task.answer_text.trim()));
@@ -169,7 +195,7 @@ function renderPreview(task) {
 
 function syncNavigation() {
   const filtered = getFilteredTasks();
-  const index = filtered.findIndex((task) => task.task_number === state.selectedTaskId);
+  const index = filtered.findIndex((task) => task.task_key === state.selectedTaskKey);
   prevTaskBtn.disabled = index <= 0;
   nextTaskBtn.disabled = index === -1 || index >= filtered.length - 1;
 }
@@ -186,11 +212,11 @@ function updateTaskInState(updatedTask) {
 }
 
 async function saveCurrentTask(fields) {
-  const task = state.tasks.find((item) => item.task_number === state.selectedTaskId);
+  const task = state.tasks.find((item) => item.task_key === state.selectedTaskKey);
   if (!task) return;
 
   try {
-    const response = await fetch(`/api/tasks/${task.task_number}`, {
+    const response = await fetch(`/api/tasks/${encodeURIComponent(task.task_key)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(fields),
@@ -203,6 +229,7 @@ async function saveCurrentTask(fields) {
 
     updateTaskInState(data.task);
     renderStats();
+    renderUserFilter();
     renderTaskList();
     showFlash("Сохранено");
   } catch (error) {
@@ -219,10 +246,11 @@ async function refreshTasks() {
       return;
     }
     state.tasks = normalizeTasks(data.tasks || []);
-    if (!state.tasks.some((task) => task.task_number === state.selectedTaskId)) {
-      state.selectedTaskId = state.tasks[0] ? state.tasks[0].task_number : null;
+    if (!state.tasks.some((task) => task.task_key === state.selectedTaskKey)) {
+      state.selectedTaskKey = state.tasks[0] ? state.tasks[0].task_key : null;
     }
     renderStats();
+    renderUserFilter();
     renderTaskList();
     showFlash("Список обновлен");
   } catch (error) {
@@ -231,22 +259,25 @@ async function refreshTasks() {
 }
 
 async function deleteCurrentTask() {
-  const task = state.tasks.find((item) => item.task_number === state.selectedTaskId);
+  const task = state.tasks.find((item) => item.task_key === state.selectedTaskKey);
   if (!task) return;
   if (!window.confirm(`Удалить задание #${task.task_number}?`)) return;
 
   try {
-    const response = await fetch(`/delete/${task.task_number}`, { method: "POST" });
+    const response = await fetch(`/api/tasks/${encodeURIComponent(task.task_key)}`, {
+      method: "DELETE",
+    });
     const data = await response.json();
     if (!response.ok || !data.ok) {
       showFlash(data.error || "Не удалось удалить задание", true);
       return;
     }
 
-    state.tasks = state.tasks.filter((item) => item.task_number !== task.task_number);
+    state.tasks = state.tasks.filter((item) => item.task_key !== task.task_key);
     const filtered = getFilteredTasks();
-    state.selectedTaskId = filtered[0] ? filtered[0].task_number : null;
+    state.selectedTaskKey = filtered[0] ? filtered[0].task_key : null;
     renderStats();
+    renderUserFilter();
     renderTaskList();
     showFlash(`Задание #${task.task_number} удалено`);
   } catch (error) {
@@ -278,6 +309,11 @@ adminSearch.addEventListener("input", () => {
   renderTaskList();
 });
 
+adminUserFilter.addEventListener("change", () => {
+  state.userFilter = adminUserFilter.value;
+  renderTaskList();
+});
+
 filterButtons.forEach((button) => {
   button.addEventListener("click", () => {
     filterButtons.forEach((item) => item.classList.remove("active"));
@@ -289,18 +325,18 @@ filterButtons.forEach((button) => {
 
 prevTaskBtn.addEventListener("click", () => {
   const filtered = getFilteredTasks();
-  const index = filtered.findIndex((task) => task.task_number === state.selectedTaskId);
+  const index = filtered.findIndex((task) => task.task_key === state.selectedTaskKey);
   if (index > 0) {
-    state.selectedTaskId = filtered[index - 1].task_number;
+    state.selectedTaskKey = filtered[index - 1].task_key;
     renderTaskList();
   }
 });
 
 nextTaskBtn.addEventListener("click", () => {
   const filtered = getFilteredTasks();
-  const index = filtered.findIndex((task) => task.task_number === state.selectedTaskId);
+  const index = filtered.findIndex((task) => task.task_key === state.selectedTaskKey);
   if (index !== -1 && index < filtered.length - 1) {
-    state.selectedTaskId = filtered[index + 1].task_number;
+    state.selectedTaskKey = filtered[index + 1].task_key;
     renderTaskList();
   }
 });
@@ -314,6 +350,7 @@ clearAnswerBtn.addEventListener("click", () => {
 });
 deleteTaskBtn.addEventListener("click", deleteCurrentTask);
 
-state.selectedTaskId = state.tasks[0] ? state.tasks[0].task_number : null;
+state.selectedTaskKey = state.tasks[0] ? state.tasks[0].task_key : null;
 renderStats();
+renderUserFilter();
 renderTaskList();
