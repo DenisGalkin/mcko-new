@@ -137,18 +137,46 @@ p.qq {
     margin-bottom: 10px;
 }
 
+.task_text_answer_view {
+    color: #2d2d2d;
+}
+
+.task_text_answer_title {
+    margin-bottom: 8px;
+    font-size: 18px;
+    color: #6f4d18;
+    font-weight: bold;
+}
+
+.task_text_answer_body {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+}
+
 div.answer_flex {
     display: flex;
+    justify-content: flex-start;
+    align-items: center;
     background-color: #e0f0f0;
     font-size: 20px;
     color: #000033;
-    padding: 10px 15px 10px 15px;
+    padding: 10px 8px 10px 15px;
     margin: 5px;
     border: 1px solid #ccc;
     text-align: left;
     vertical-align: top;
     cursor: pointer;
     max-width: 1000px;
+}
+
+div.answer_flex p {
+    margin: 0;
+    margin-right: auto;
+}
+
+div.answer_flex input {
+    margin-left: 6px;
 }
 
 div.answer_flex:hover {
@@ -170,43 +198,46 @@ div.answer {
 .upload_box {
     display: none;
     width: 990px;
-    background: #f1f1f1;
-    border: 1px solid #d6d6d6;
-    padding: 14px;
+    background: #f7f8f8;
+    border: 1px solid #d9dddd;
+    padding: 10px;
     box-sizing: border-box;
 }
 
 .upload_drop {
-    min-height: 120px;
-    border: 1px dashed #c8c8c8;
-    background: #f6f6f6;
+    min-height: 0;
+    border: 1px dashed #d1d4d4;
+    background: #fbfbfb;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
+    align-items: stretch;
+    justify-content: flex-start;
+    text-align: left;
     color: #666666;
-    padding: 16px;
+    padding: 10px 12px;
     box-sizing: border-box;
 }
 
 .upload_text_compact {
     width: 100%;
-    max-width: 760px;
     display: flex;
     align-items: stretch;
     gap: 10px;
-    margin: 8px 0 12px;
+    margin: 6px 0 0;
+}
+
+.upload_text_compact.compact {
+    margin-bottom: 2px;
 }
 
 .upload_textarea {
     flex: 1;
-    min-height: 86px;
-    max-height: 120px;
+    min-height: 58px;
+    max-height: 110px;
     resize: vertical;
     border: 1px solid #b8b8b8;
     padding: 8px 10px;
-    font-size: 16px;
+    font-size: 15px;
     line-height: 1.35;
     color: #333333;
     background: #ffffff;
@@ -219,24 +250,24 @@ div.answer {
 }
 
 .upload_title {
-    font-size: 20px;
-    color: #444444;
-    margin-bottom: 8px;
+    font-size: 17px;
+    color: #3f4d57;
+    margin: 0;
 }
 
 .upload_user_badge {
-    margin-bottom: 10px;
-    padding: 4px 10px;
-    border: 1px solid #bfc9d4;
+    padding: 2px 8px;
+    border: 1px solid #d1d8de;
     background: #ffffff;
     color: #34506b;
-    font-size: 15px;
+    font-size: 13px;
+    align-self: flex-start;
 }
 
 .upload_notice {
     min-height: 18px;
-    margin-top: 8px;
-    font-size: 14px;
+    margin-top: 6px;
+    font-size: 13px;
     color: #666666;
     opacity: 0;
     transition: opacity 0.15s ease;
@@ -246,10 +277,36 @@ div.answer {
     opacity: 1;
 }
 
-.upload_text {
-    font-size: 18px;
-    color: #666666;
-    margin-bottom: 10px;
+.upload_header_line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.upload_controls_line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.upload_task_number_input {
+    width: 260px;
+    max-width: 100%;
+    height: 38px;
+    border: 1px solid #bfc7cf;
+    background: #ffffff;
+    color: #263846;
+    padding: 6px 10px;
+    box-sizing: border-box;
+    font-size: 15px;
+}
+
+.upload_text_hint {
+    margin-top: 6px;
+    color: #6f7d87;
+    font-size: 13px;
 }
 
 .files_panel,
@@ -452,12 +509,14 @@ div.answer {
 .admin_search_row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
     gap: 8px;
 }
 
 .admin_search {
     width: 100%;
     box-sizing: border-box;
+    height: 44px;
     padding: 10px 12px;
     border: 1px solid #c8d4df;
     margin-bottom: 8px;
@@ -467,9 +526,19 @@ div.answer {
 
 .admin_ghost_btn {
     white-space: nowrap;
-    padding: 10px 14px;
-    background: #ffffff;
+    height: 44px;
+    padding: 0 14px;
+    background: #f6f9fc;
+    border: 1px solid #c8d4df;
+    color: #31506d;
     border-radius: 12px;
+    font-size: 15px;
+    line-height: 1;
+    align-self: start;
+}
+
+.admin_ghost_btn:hover {
+    background: #eaf2f9;
 }
 
 .admin_filter_row {
@@ -483,11 +552,16 @@ div.answer {
     font-size: 15px;
     padding: 10px 12px;
     border-radius: 12px;
+    background: #ffffff;
+    border: 1px solid #c8d4df;
+    color: #496177;
 }
 
 .admin_filter_btn.active {
-    background: #dcecff;
-    border-color: #6d97c0;
+    background: #204a72;
+    border-color: #173a59;
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(32, 74, 114, 0.24);
 }
 
 .admin_list_meta {
@@ -571,6 +645,13 @@ div.answer {
     flex-wrap: wrap;
 }
 
+.admin_toolbar_left button,
+.admin_toolbar_right button,
+.admin_action_row button {
+    border-radius: 999px;
+    padding: 10px 16px;
+}
+
 .admin_empty {
     border: 1px dashed #bfcddb;
     background: #ffffff;
@@ -603,9 +684,7 @@ div.answer {
 }
 
 .admin_heading_user {
-    margin-top: 6px;
-    color: #456580;
-    font-size: 18px;
+    display: none;
 }
 
 .admin_heading_tags {

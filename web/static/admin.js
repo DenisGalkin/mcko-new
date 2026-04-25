@@ -31,6 +31,7 @@ const filterButtons = [...document.querySelectorAll(".admin_filter_btn")];
 const mobileListBtn = document.getElementById("mobileListBtn");
 const mobileEditorBtn = document.getElementById("mobileEditorBtn");
 const mobileRefreshBtn = document.getElementById("mobileRefreshBtn");
+const AUTO_REFRESH_MS = 5000;
 
 const state = {
   tasks: normalizeTasks(initialTasks),
@@ -39,6 +40,7 @@ const state = {
   query: "",
   userFilter: "",
   mobilePane: "list",
+  refreshInFlight: false,
 };
 
 function normalizeTasks(tasks) {
@@ -54,9 +56,15 @@ function normalizeTasks(tasks) {
       filename: task.filename || "",
       created: task.created || "",
     }))
-    .sort((a, b) =>
-      a.task_number.localeCompare(b.task_number, undefined, { numeric: true }),
-    );
+    .sort(compareAdminTasks);
+}
+
+function compareAdminTasks(a, b) {
+  const userDiff = Number(a.user_id || 0) - Number(b.user_id || 0);
+  if (userDiff !== 0) return userDiff;
+  return String(a.task_number || "").localeCompare(String(b.task_number || ""), undefined, {
+    numeric: true,
+  });
 }
 
 function getFilteredTasks() {
@@ -165,7 +173,7 @@ function renderEditor(task) {
   adminEmpty.hidden = true;
 
   adminTaskTitle.textContent = `№${task.task_number}`;
-  adminTaskUser.textContent = `User ${task.user_id}`;
+  adminTaskUser.textContent = "";
   adminTaskCreated.textContent = task.created ? `Создано: ${task.created}` : "";
   adminTaskStatus.textContent = task.answer_text.trim() ? "Ответ сохранен" : "Без ответа";
   adminTaskStatus.classList.toggle("is-solved", Boolean(task.answer_text.trim()));
@@ -243,9 +251,7 @@ function updateTaskInState(updatedTask) {
   } else {
     state.tasks[keyIndex] = normalized;
   }
-  state.tasks.sort((a, b) =>
-    a.task_number.localeCompare(b.task_number, undefined, { numeric: true }),
-  );
+  state.tasks.sort(compareAdminTasks);
 }
 
 async function saveCurrentTask(fields) {
@@ -276,12 +282,22 @@ async function saveCurrentTask(fields) {
   }
 }
 
-async function refreshTasks() {
+async function refreshTasks(options = {}) {
+  const { silent = false, preserveDraft = false } = options;
+  if (state.refreshInFlight) return;
+
+  const shouldPreserveAnswer =
+    preserveDraft && document.activeElement === adminAnswerText;
+  const answerDraft = shouldPreserveAnswer ? adminAnswerText.value : null;
+
+  state.refreshInFlight = true;
   try {
     const response = await fetch("/api/tasks");
     const data = await response.json();
     if (!response.ok || !data.ok) {
-      showFlash(data.error || "Не удалось обновить список", true);
+      if (!silent) {
+        showFlash(data.error || "Не удалось обновить список", true);
+      }
       return;
     }
     state.tasks = normalizeTasks(data.tasks || []);
@@ -291,9 +307,21 @@ async function refreshTasks() {
     renderStats();
     renderUserFilter();
     renderTaskList();
-    showFlash("Список обновлен");
+    if (shouldPreserveAnswer && document.activeElement !== adminAnswerText) {
+      adminAnswerText.focus();
+    }
+    if (shouldPreserveAnswer) {
+      adminAnswerText.value = answerDraft;
+    }
+    if (!silent) {
+      showFlash("Список обновлен");
+    }
   } catch (error) {
-    showFlash("Не удалось обновить список", true);
+    if (!silent) {
+      showFlash("Не удалось обновить список", true);
+    }
+  } finally {
+    state.refreshInFlight = false;
   }
 }
 
@@ -405,8 +433,8 @@ nextTaskBtn.addEventListener("click", () => {
 });
 
 clearFiltersBtn.addEventListener("click", clearFilters);
-refreshTasksBtn.addEventListener("click", refreshTasks);
-mobileRefreshBtn.addEventListener("click", refreshTasks);
+refreshTasksBtn.addEventListener("click", () => refreshTasks());
+mobileRefreshBtn.addEventListener("click", () => refreshTasks());
 saveAnswerBtnAdmin.addEventListener("click", () => saveCurrentTask({ answer_text: adminAnswerText.value }));
 clearAnswerBtn.addEventListener("click", () => {
   adminAnswerText.value = "";
@@ -423,9 +451,18 @@ mobileEditorBtn.addEventListener("click", () => {
 });
 
 window.addEventListener("resize", syncMobilePane);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    refreshTasks({ silent: true, preserveDraft: true });
+  }
+});
 
 state.selectedTaskKey = state.tasks[0] ? state.tasks[0].task_key : null;
 renderStats();
 renderUserFilter();
 renderTaskList();
 syncMobilePane();
+setInterval(() => {
+  if (document.visibilityState !== "visible") return;
+  refreshTasks({ silent: true, preserveDraft: true });
+}, AUTO_REFRESH_MS);

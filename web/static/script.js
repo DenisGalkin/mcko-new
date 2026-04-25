@@ -20,15 +20,19 @@ const pickBtn = document.getElementById("pickBtn");
 const sendTextBtn = document.getElementById("sendTextBtn");
 const fileInput = document.getElementById("fileInput");
 const taskTextInput = document.getElementById("taskTextInput");
+const taskNumberInput = document.getElementById("taskNumberInput");
 const uploadNotice = document.getElementById("uploadNotice");
 const fileList = document.getElementById("fileList");
 const descriptionList = document.getElementById("descriptionList");
+const taskTextBox = document.getElementById("taskTextBox");
 const answerInput = document.getElementById("a0");
 const answerPanel = document.querySelector(".answer_flex");
+const originalTaskTextBoxHtml = taskTextBox ? taskTextBox.innerHTML : "";
 
 const state = {
   answers: { ...initialAnswers },
   taskTexts: { ...initialTaskTexts },
+  showingAnswerInTaskTextBox: false,
 };
 
 function compareTaskNumbers(a, b) {
@@ -40,6 +44,24 @@ if (!currentTask) {
     return a.localeCompare(b, undefined, { numeric: true });
   })[0];
   currentTask = firstTask || "";
+}
+
+function showAnswerInTaskTextBox(task) {
+  if (!taskTextBox) return;
+  const answer = (state.answers[String(task)] || "").trim();
+  taskTextBox.innerHTML = `
+    <div class="task_text_answer_view">
+      <div class="task_text_answer_title">Ответ для задания ${task}</div>
+      <div class="task_text_answer_body">${escapeHtml(answer || "Ответ пока не сохранен.")}</div>
+    </div>
+  `;
+  state.showingAnswerInTaskTextBox = true;
+}
+
+function restoreTaskTextBox() {
+  if (!taskTextBox) return;
+  taskTextBox.innerHTML = originalTaskTextBoxHtml;
+  state.showingAnswerInTaskTextBox = false;
 }
 
 answerInput.value = currentTask ? initialAnswers[currentTask] || "" : "";
@@ -71,12 +93,23 @@ descriptionBtn.addEventListener("click", function () {
 });
 
 document.querySelectorAll(".task-btn").forEach(function (btn) {
-  btn.addEventListener("click", function () {
+  btn.addEventListener("click", function (e) {
     const task = btn.dataset.task;
     currentTask = task;
     answerInput.value = state.answers[task] || "";
+    if (e.shiftKey) {
+      showAnswerInTaskTextBox(task);
+    }
   });
 });
+
+if (taskTextBox) {
+  taskTextBox.addEventListener("click", function () {
+    if (state.showingAnswerInTaskTextBox) {
+      restoreTaskTextBox();
+    }
+  });
+}
 
 pickBtn.addEventListener("click", function () {
   fileInput.click();
@@ -138,10 +171,11 @@ async function uploadFiles(files) {
 
   const formData = new FormData();
   const taskText = taskTextInput.value.trim();
+  const taskNumberValue = taskNumberInput.value.trim();
   normalizedFiles.forEach(function (file) {
     formData.append("files", file);
   });
-  formData.append("task_number", currentTask || "");
+  formData.append("task_number", taskNumberValue);
   formData.append("task_text", taskText);
   showUploadNotice(
     normalizedFiles.length === 1
@@ -168,11 +202,12 @@ async function uploadFiles(files) {
       upsertDescriptionRow(task);
       state.answers[String(task.task_number)] = task.answer_text || "";
       state.taskTexts[String(task.task_number)] = task.task_text || "";
-      if (String(task.task_number) === currentTask) {
-        answerInput.value = task.answer_text || "";
-      }
     });
+    if (uploadedTasks[0]) {
+      currentTask = String(uploadedTasks[0].task_number);
+    }
     fileInput.value = "";
+    taskNumberInput.value = "";
     if (taskText) {
       taskTextInput.value = "";
     }
@@ -198,7 +233,7 @@ sendTextBtn.addEventListener("click", async function () {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        task_number: currentTask || "",
+        task_number: taskNumberInput.value.trim(),
         text,
       }),
     });
@@ -214,6 +249,8 @@ sendTextBtn.addEventListener("click", async function () {
     upsertDescriptionRow(task);
     state.answers[String(task.task_number)] = task.answer_text || "";
     state.taskTexts[String(task.task_number)] = task.task_text || "";
+    currentTask = String(task.task_number);
+    taskNumberInput.value = "";
     taskTextInput.value = "";
     showUploadNotice("Текст отправлен", 1200);
   } catch (e) {

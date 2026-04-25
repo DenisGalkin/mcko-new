@@ -33,6 +33,35 @@ USER_COOKIE_NAME = "mcko_user_id"
 BOT_NOTIFY_SESSION = requests.Session()
 
 
+def parse_task_number_tokens(raw_value):
+    raw = str(raw_value or "").strip()
+    if not raw:
+        return []
+
+    tokens = [token for token in raw.split() if token.strip()]
+    normalized = []
+    for token in tokens:
+        task_number = normalize_task_number(token)
+        if not task_number:
+            raise ValueError(f"Некорректный номер задания: {token}")
+        normalized.append(task_number)
+    return normalized
+
+
+def build_task_number_sequence(start_task_number, count):
+    sequence = []
+    current = normalize_task_number(start_task_number)
+    if not current:
+        current = get_next_task_number_for_user_db(0)
+
+    for offset in range(int(count)):
+        task_number = get_next_task_number(current, offset) if offset else current
+        if sequence and task_number == sequence[-1]:
+            raise ValueError("Недостаточно номеров заданий для загрузки всех файлов")
+        sequence.append(task_number)
+    return sequence
+
+
 def get_current_user_id(create=False):
     cookie_value = str(request.cookies.get(USER_COOKIE_NAME, "")).strip()
     if cookie_value.isdigit() and user_exists(int(cookie_value)):
@@ -130,12 +159,38 @@ def upload():
     raw_num = request.form.get("task_number", "").strip()
     task_text = request.form.get("task_text", "").strip()
     ensure_user(user_id, datetime.now().isoformat())
-    start_task_num = normalize_task_number(raw_num) or get_next_task_number_for_user_db(user_id)
+
+    try:
+        requested_task_numbers = parse_task_number_tokens(raw_num)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+    if requested_task_numbers and len(requested_task_numbers) not in {1, len(files)}:
+        return jsonify(
+            {
+                "ok": False,
+                "error": "Количество номеров должно быть равно числу файлов или одному номеру",
+            }
+        ), 400
+
+    start_task_num = requested_task_numbers[0] if requested_task_numbers else get_next_task_number_for_user_db(user_id)
+
+    try:
+        auto_task_numbers = (
+            build_task_number_sequence(start_task_num, len(files))
+            if len(requested_task_numbers) != len(files)
+            else []
+        )
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
     uploaded_tasks = []
 
     for offset, file in enumerate(files):
-        task_num = get_next_task_number(start_task_num, offset) if offset else start_task_num
+        if len(requested_task_numbers) == len(files):
+            task_num = requested_task_numbers[offset]
+        else:
+            task_num = auto_task_numbers[offset]
         ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
         task_key = build_task_key(user_id, task_num)
         filename = secure_filename(f"{task_number_to_code(task_num)}_{user_id}.{ext}")
@@ -161,8 +216,10 @@ def upload():
             "task_text": task_text or existing_task.get("task_text", ""),
         }
 
-        upsert_task(task_info)
-        uploaded_tasks.append(task_info)
+        saved_task = upsert_task(task_info)
+        if not saved_task:
+            return jsonify({"ok": False, "error": "Не удалось сохранить задание"}), 500
+        uploaded_tasks.append(saved_task)
 
     for task_info in uploaded_tasks:
         notify_bot(task_info)
@@ -192,7 +249,15 @@ def send_task_text():
     if not text:
         return jsonify({"ok": False, "error": "Текст пустой"}), 400
 
-    task_num = normalize_task_number(raw_num) or get_next_task_number_for_user_db(user_id)
+    try:
+        requested_task_numbers = parse_task_number_tokens(raw_num)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+    if len(requested_task_numbers) > 1:
+        return jsonify({"ok": False, "error": "Для текста можно указать только один номер"}), 400
+
+    task_num = requested_task_numbers[0] if requested_task_numbers else get_next_task_number_for_user_db(user_id)
     ensure_user(user_id, datetime.now().isoformat())
 
     task_key = build_task_key(user_id, task_num)
@@ -207,11 +272,13 @@ def send_task_text():
         "answer_text": existing.get("answer_text", ""),
         "task_text": text,
     }
-    upsert_task(task_info)
+    saved_task = upsert_task(task_info)
+    if not saved_task:
+        return jsonify({"ok": False, "error": "Не удалось сохранить задание"}), 500
 
-    notify_bot(task_info)
+    notify_bot(saved_task)
 
-    response = make_response(jsonify({"ok": True, "task": task_info}))
+    response = make_response(jsonify({"ok": True, "task": saved_task}))
     return with_user_cookie(response, user_id, created)
 
 

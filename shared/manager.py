@@ -465,10 +465,10 @@ def get_all_tasks():
             """
             SELECT task_key, user_id, task_number, task_code, filename, created, answer_text, task_text
             FROM tasks
-            ORDER BY user_id, task_code
             """
         ).fetchall()
-        return [_row_to_task(row) for row in rows]
+        tasks = [_row_to_task(row) for row in rows]
+        return sorted(tasks, key=lambda item: (int(item["user_id"]), task_sort_key(item["task_number"])))
     finally:
         conn.close()
 

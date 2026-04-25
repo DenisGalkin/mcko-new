@@ -144,6 +144,7 @@
                 <p class="MsoNormal">&nbsp;</p>
 
                 <div
+                    id="taskTextBox"
                     style="
                         border: 2px solid #996633;
                         background: #fff9ed;
@@ -251,15 +252,27 @@
             >
                 <div class="upload_box" id="uploadBox">
                     <div class="upload_drop" id="dropZone">
-                        <div class="upload_title">Загрузить фото</div>
-                        <div class="upload_user_badge">
-                            Ваш ID: {{ current_user_id }}
+                        <div class="upload_header_line">
+                            <div class="upload_title">Загрузка</div>
+                            <div class="upload_user_badge">
+                                User {{ current_user_id }}
+                            </div>
                         </div>
-                        <div class="upload_text">
-                            Перетащите фото сюда, вставьте его или выберите
-                            несколько файлов через проводник
+                        <div class="upload_controls_line">
+                            <input
+                                type="text"
+                                id="taskNumberInput"
+                                class="upload_task_number_input"
+                                placeholder="Номер: 1 или 1 2 3 101"
+                                autocomplete="off"
+                                spellcheck="false"
+                            />
+                            <button type="button" id="pickBtn">Выбрать файлы</button>
                         </div>
-                        <div class="upload_text_compact">
+                        <div class="upload_text_hint">
+                            Если поле номера пустое, задания нумеруются по порядку.
+                        </div>
+                        <div class="upload_text_compact compact">
                             <textarea
                                 id="taskTextInput"
                                 class="upload_textarea"
@@ -269,7 +282,6 @@
                                 Отправить
                             </button>
                         </div>
-                        <button type="button" id="pickBtn">Выбрать файлы</button>
                         <input type="file" id="fileInput" hidden multiple accept="image/*" />
                     </div>
                     <div
