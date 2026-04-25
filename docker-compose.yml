@@ -6,9 +6,11 @@ services:
     environment:
       BOT_HOST: bot
       WEB_HOST: web
+      SQLITE_DB_FILE: /app/storage/data.sqlite3
     volumes:
       - ./uploads:/app/uploads
       - ./data.json:/app/data.json
+      - ./storage:/app/storage
       - ./logs:/app/logs
     restart: always
 
@@ -19,9 +21,11 @@ services:
     environment:
       BOT_HOST: bot
       WEB_HOST: web
+      SQLITE_DB_FILE: /app/storage/data.sqlite3
     volumes:
       - ./uploads:/app/uploads
       - ./data.json:/app/data.json
+      - ./storage:/app/storage
       - ./logs:/app/logs
     restart: always
 

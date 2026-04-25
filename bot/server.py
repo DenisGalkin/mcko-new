@@ -9,7 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config import Config, logger
 from shared.manager import (
     build_task_key,
-    load_data,
+    get_subscriber_chat_ids,
     merge_telegram_message_map,
     task_number_to_code,
 )
@@ -46,7 +46,7 @@ async def notify_subscribers(bot: Bot, task_key, user_id, task_number, filename,
     message_map_updates = {}
     task_label = f"№{task_number} User {user_id}"
 
-    for chat_id in load_data().get("telegram_subscribers", {}):
+    for chat_id in get_subscriber_chat_ids():
         try:
             if path and path.exists():
                 caption = [f"📑 Новое задание {task_label}"]

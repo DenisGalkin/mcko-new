@@ -1,3 +1,3 @@
-m.mormail.org {
-    reverse_proxy web:1000
+m.vexnd.com {
+    reverse_proxy web:2000
 }

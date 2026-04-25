@@ -3,6 +3,5 @@ gunicorn
 python-dotenv
 aiogram
 aiohttp
-aiofiles
 requests
 loguru

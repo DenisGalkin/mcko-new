@@ -7,18 +7,28 @@ from loguru import logger
 
 load_dotenv()
 
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
 logger.remove()
 logger.add(
     sys.stderr,
     format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+    level=LOG_LEVEL,
+    enqueue=True,
 )
-logger.add("logs/app.log", rotation="10 MB", retention="7 days", level="DEBUG")
+logger.add(
+    "logs/app.log",
+    rotation="10 MB",
+    retention="7 days",
+    level=LOG_LEVEL,
+    enqueue=True,
+)
 
 
 class Config:
     BASE_DIR = Path(__file__).resolve().parent
     UPLOAD_DIR = BASE_DIR / "uploads"
-    DATA_FILE = BASE_DIR / "data.json"
+    DB_FILE = BASE_DIR / os.getenv("SQLITE_DB_FILE", "data.sqlite3")
 
     BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     BOT_HOST = os.getenv("BOT_HOST", "localhost")
@@ -27,6 +37,9 @@ class Config:
     BOT_PORT = int(os.getenv("BOT_INTERNAL_PORT", 1001))
     BOT_URL = os.getenv("BOT_URL", f"http://{BOT_HOST}:{BOT_PORT}/notify")
     WEB_URL = os.getenv("WEB_URL", f"http://{WEB_HOST}:{WEB_PORT}")
+    INTERNAL_HTTP_TIMEOUT = float(os.getenv("INTERNAL_HTTP_TIMEOUT", "1.5"))
+    DATA_CLEANUP_INTERVAL = int(os.getenv("DATA_CLEANUP_INTERVAL", "30"))
+    SQLITE_TIMEOUT = float(os.getenv("SQLITE_TIMEOUT", "5.0"))
 
     TEST_DURATION = 44
 

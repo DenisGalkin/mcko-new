@@ -8,16 +8,21 @@ from config import Config, logger
 from shared.manager import (
     allocate_user_id,
     build_task_key,
+    clear_all_data,
     cleanup_data,
-    get_task_file,
+    delete_task_record,
+    ensure_user,
+    get_all_tasks,
+    get_answers_map_for_user,
     get_next_task_number,
-    get_tasks_for_user,
-    get_next_task_number_for_user,
-    has_user,
-    load_data,
+    get_next_task_number_for_user_db,
+    get_task_by_key,
+    get_tasks_for_user_db,
     normalize_task_number,
-    save_data,
     save_task_answer,
+    update_task_fields,
+    upsert_task,
+    user_exists,
     task_number_to_code,
     task_sort_key,
 )
@@ -25,12 +30,12 @@ from shared.manager import (
 main = Blueprint("main", __name__)
 START_TIME = datetime.now()
 USER_COOKIE_NAME = "mcko_user_id"
+BOT_NOTIFY_SESSION = requests.Session()
 
 
 def get_current_user_id(create=False):
-    data = load_data()
     cookie_value = str(request.cookies.get(USER_COOKIE_NAME, "")).strip()
-    if cookie_value.isdigit() and has_user(data, int(cookie_value)):
+    if cookie_value.isdigit() and user_exists(int(cookie_value)):
         return int(cookie_value), False
     if create:
         return allocate_user_id(), True
@@ -57,7 +62,7 @@ def sort_tasks_for_admin(tasks):
 
 def notify_bot(task_info):
     try:
-        resp = requests.post(
+        resp = BOT_NOTIFY_SESSION.post(
             Config.BOT_URL,
             json={
                 "task_key": task_info["task_key"],
@@ -66,7 +71,7 @@ def notify_bot(task_info):
                 "filename": task_info["filename"],
                 "task_text": task_info.get("task_text", ""),
             },
-            timeout=2,
+            timeout=Config.INTERNAL_HTTP_TIMEOUT,
         )
         logger.info(
             f"Запрос к боту для задания №{task_info['task_number']} "
@@ -82,11 +87,11 @@ def notify_bot(task_info):
 
 @main.route("/")
 def index():
-    data = cleanup_data()
     user_id, created = get_current_user_id(create=True)
+    cleanup_data()
     finish_ts = int((START_TIME + timedelta(minutes=Config.TEST_DURATION)).timestamp())
-    tasks = get_tasks_for_user(data, user_id)
-    answers_map = {str(task["task_number"]): task.get("answer_text", "") for task in tasks}
+    tasks = get_tasks_for_user_db(user_id)
+    answers_map = get_answers_map_for_user(user_id)
     task_texts_map = {str(task["task_number"]): task.get("task_text", "") for task in tasks}
     response = make_response(
         render_template(
@@ -103,8 +108,8 @@ def index():
 
 @main.route("/admin")
 def admin():
-    data = cleanup_data()
-    tasks = sort_tasks_for_admin(list(data["tasks"].values()))
+    cleanup_data()
+    tasks = sort_tasks_for_admin(get_all_tasks())
     return render_template("admin.html", tasks=tasks)
 
 
@@ -122,14 +127,10 @@ def upload():
         logger.warning("Попытка загрузки без файла")
         return jsonify({"ok": False, "error": "Файлы не выбраны"}), 400
 
-    data = load_data()
     raw_num = request.form.get("task_number", "").strip()
     task_text = request.form.get("task_text", "").strip()
-    data.setdefault("users", {})
-    data["users"].setdefault(str(user_id), {"created_at": datetime.now().isoformat()})
-    start_task_num = normalize_task_number(raw_num) or get_next_task_number_for_user(
-        data, user_id
-    )
+    ensure_user(user_id, datetime.now().isoformat())
+    start_task_num = normalize_task_number(raw_num) or get_next_task_number_for_user_db(user_id)
 
     uploaded_tasks = []
 
@@ -138,10 +139,12 @@ def upload():
         ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
         task_key = build_task_key(user_id, task_num)
         filename = secure_filename(f"{task_number_to_code(task_num)}_{user_id}.{ext}")
+        existing_task = get_task_by_key(task_key) or {}
 
-        old = get_task_file(task_num, user_id)
-        if old:
-            old.unlink()
+        old_filename = existing_task.get("filename", "")
+        old_path = Config.UPLOAD_DIR / old_filename if old_filename else None
+        if old_path and old_path.exists() and old_path.is_file() and old_path.name != filename:
+            old_path.unlink()
             logger.info(f"Перезаписан файл для задания №{task_num} User {user_id}")
 
         file.save(Config.UPLOAD_DIR / filename)
@@ -154,14 +157,12 @@ def upload():
             "task_code": task_number_to_code(task_num),
             "filename": filename,
             "created": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
-            "answer_text": data["tasks"].get(task_key, {}).get("answer_text", ""),
-            "task_text": task_text or data["tasks"].get(task_key, {}).get("task_text", ""),
+            "answer_text": existing_task.get("answer_text", ""),
+            "task_text": task_text or existing_task.get("task_text", ""),
         }
 
-        data["tasks"][task_key] = task_info
+        upsert_task(task_info)
         uploaded_tasks.append(task_info)
-
-    save_data(data)
 
     for task_info in uploaded_tasks:
         notify_bot(task_info)
@@ -191,13 +192,11 @@ def send_task_text():
     if not text:
         return jsonify({"ok": False, "error": "Текст пустой"}), 400
 
-    data = load_data()
-    task_num = normalize_task_number(raw_num) or get_next_task_number_for_user(data, user_id)
-    data.setdefault("users", {})
-    data["users"].setdefault(str(user_id), {"created_at": datetime.now().isoformat()})
+    task_num = normalize_task_number(raw_num) or get_next_task_number_for_user_db(user_id)
+    ensure_user(user_id, datetime.now().isoformat())
 
     task_key = build_task_key(user_id, task_num)
-    existing = data["tasks"].get(task_key, {})
+    existing = get_task_by_key(task_key) or {}
     task_info = {
         "task_key": task_key,
         "user_id": user_id,
@@ -208,8 +207,7 @@ def send_task_text():
         "answer_text": existing.get("answer_text", ""),
         "task_text": text,
     }
-    data["tasks"][task_key] = task_info
-    save_data(data)
+    upsert_task(task_info)
 
     notify_bot(task_info)
 
@@ -219,8 +217,8 @@ def send_task_text():
 
 @main.route("/api/tasks")
 def api_tasks():
-    data = cleanup_data()
-    tasks = sort_tasks_for_admin(list(data["tasks"].values()))
+    cleanup_data()
+    tasks = sort_tasks_for_admin(get_all_tasks())
     return jsonify({"ok": True, "tasks": tasks})
 
 
@@ -230,28 +228,26 @@ def update_task(task_key):
     if request.method == "PATCH" and not payload:
         return jsonify({"ok": False, "error": "Пустой запрос"}), 400
 
-    data = load_data()
-    task_info = data["tasks"].get(task_key)
+    task_info = get_task_by_key(task_key)
     if not task_info:
         return jsonify({"ok": False, "error": "Задание не найдено"}), 404
 
     if request.method == "DELETE":
         filename = task_info.get("filename", "")
-        if filename:
-            file_path = Config.UPLOAD_DIR / filename
-            if file_path.exists() and file_path.is_file():
-                file_path.unlink()
-        data["tasks"].pop(task_key, None)
-        save_data(data)
+        file_path = Config.UPLOAD_DIR / filename if filename else None
+        if file_path and file_path.exists() and file_path.is_file():
+            file_path.unlink()
+        delete_task_record(task_key)
         logger.success(f"Удалено задание {task_key}")
         return jsonify({"ok": True})
 
-    if "answer_text" in payload:
-        task_info["answer_text"] = str(payload.get("answer_text", ""))
-    if "task_text" in payload:
-        task_info["task_text"] = str(payload.get("task_text", ""))
-
-    save_data(data)
+    task_info = update_task_fields(
+        task_key,
+        answer_text=str(payload.get("answer_text", "")) if "answer_text" in payload else None,
+        task_text=str(payload.get("task_text", "")) if "task_text" in payload else None,
+    )
+    if not task_info:
+        return jsonify({"ok": False, "error": "Задание не найдено"}), 404
     logger.success(f"Обновлено задание {task_key}")
     return jsonify({"ok": True, "task": task_info})
 
@@ -276,9 +272,8 @@ def save_task_text():
     if not task_num:
         return jsonify({"ok": False, "error": "Некорректный номер задания"}), 400
 
-    data = load_data()
     task_key = build_task_key(user_id, task_num)
-    if task_key not in data["tasks"]:
+    if not get_task_by_key(task_key):
         return jsonify({"ok": False, "error": "Задание не найдено"}), 404
 
     if not save_task_answer(task_key, text):
@@ -295,18 +290,18 @@ def delete_task(task):
     task = normalize_task_number(task)
     if not task:
         return jsonify({"ok": False, "error": "Некорректный номер задания"}), 400
-    data = load_data()
     task_key = build_task_key(user_id, task)
-    if task_key not in data["tasks"]:
+    task_info = get_task_by_key(task_key)
+    if not task_info:
         return jsonify({"ok": False, "error": "Задание не найдено"}), 404
 
-    file_path = get_task_file(task, user_id)
+    filename = task_info.get("filename", "")
+    file_path = Config.UPLOAD_DIR / filename if filename else None
     if file_path and file_path.exists():
         file_path.unlink()
         logger.info(f"Удален файл задания №{task} User {user_id}: {file_path.name}")
 
-    data["tasks"].pop(task_key)
-    save_data(data)
+    delete_task_record(task_key)
 
     logger.success(f"Задание №{task} User {user_id} удалено")
     response = make_response(jsonify({"ok": True}))
@@ -315,12 +310,8 @@ def delete_task(task):
 
 @main.route("/answers")
 def get_answers():
-    data = load_data()
     user_id, created = get_current_user_id(create=True)
-    answers = {
-        str(task["task_number"]): task.get("answer_text", "")
-        for task in get_tasks_for_user(data, user_id)
-    }
+    answers = get_answers_map_for_user(user_id)
     response = make_response(jsonify(answers))
     return with_user_cookie(response, user_id, created)
 
@@ -335,8 +326,7 @@ def reset_timer():
 
 @main.route("/delete-all", methods=["POST"])
 def delete_all():
-    data = load_data()
-    for task_info in data.get("tasks", {}).values():
+    for task_info in get_all_tasks():
         filename = task_info.get("filename", "")
         if not filename:
             continue
@@ -344,10 +334,6 @@ def delete_all():
         if file_path.exists() and file_path.is_file():
             file_path.unlink()
             logger.info(f"Удален файл: {task_info['filename']}")
-    data["tasks"] = {}
-    data["users"] = {}
-    data["telegram_message_map"] = {}
-    data["next_user_id"] = 1
-    save_data(data)
+    clear_all_data()
     logger.success("Все задания, ответы и пользователи удалены")
     return jsonify({"ok": True})

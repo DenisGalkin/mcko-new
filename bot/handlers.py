@@ -9,11 +9,12 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from config import Config, logger
 from shared.manager import (
     build_task_key,
-    get_task_file,
-    load_data,
+    get_all_tasks,
+    get_message_mapping,
+    get_task_by_key,
     merge_telegram_message_map,
-    save_data,
     save_task_answer,
+    set_subscriber,
 )
 
 router = Router()
@@ -25,6 +26,7 @@ HELP_BUTTON_TEXT = "ℹ️ Помощь"
 RESET_BUTTON_TEXT = "⏱ Сбросить таймер"
 DELETE_BUTTON_TEXT = "🗑 Очистить всё"
 ALL_FILTER = "0"
+WEB_SESSION = requests.Session()
 
 
 def parse_task_ref(task_ref):
@@ -74,8 +76,9 @@ def parse_created_at(task):
 
 
 def get_sorted_tasks(data):
+    tasks = data if isinstance(data, list) else data.get("tasks", {}).values()
     return sorted(
-        data.get("tasks", {}).values(),
+        tasks,
         key=lambda task: (
             parse_created_at(task),
             int(task.get("user_id", 0)),
@@ -396,7 +399,7 @@ def format_task_card(task):
 
 
 async def send_tasks_list(target_message, page=0, edit=False, user_id=ALL_FILTER, task_number=ALL_FILTER):
-    all_tasks = get_sorted_tasks(load_data())
+    all_tasks = get_sorted_tasks(get_all_tasks())
     if not all_tasks:
         await respond_or_edit(target_message, "Заданий пока нет.", edit=edit)
         return
@@ -441,10 +444,9 @@ async def send_task_card(
     filter_user_id=ALL_FILTER,
     filter_task_number=ALL_FILTER,
 ):
-    data = load_data()
-    task = data.get("tasks", {}).get(build_task_key(user_id, task_number))
+    task = get_task_by_key(build_task_key(user_id, task_number))
     tasks = filter_tasks(
-        get_sorted_tasks(data),
+        get_sorted_tasks(get_all_tasks()),
         user_id=filter_user_id,
         task_number=filter_task_number,
     )
@@ -474,9 +476,9 @@ async def send_task_card(
 
 
 async def resend_task_file(target_message, user_id, task_number):
-    data = load_data()
-    task = data.get("tasks", {}).get(build_task_key(user_id, task_number))
-    file_path = get_task_file(task_number, user_id)
+    task = get_task_by_key(build_task_key(user_id, task_number))
+    filename = task.get("filename", "") if task else ""
+    file_path = Config.UPLOAD_DIR / filename if filename else None
 
     if not task:
         await target_message.answer(f"❌ Не найдено задание №{task_number} User {user_id}")
@@ -492,7 +494,7 @@ async def resend_task_file(target_message, user_id, task_number):
             f"📑 {task_label(task)}\n\n"
             "Ответьте на это сообщение текстом, чтобы сохранить или обновить ответ."
         ),
-        reply_markup=build_task_actions_keyboard(get_sorted_tasks(data), task),
+        reply_markup=build_task_actions_keyboard(get_sorted_tasks(get_all_tasks()), task),
     )
     merge_telegram_message_map(
         {
@@ -508,7 +510,7 @@ async def resend_task_file(target_message, user_id, task_number):
 
 
 async def send_task_answer(target_message, user_id, task_number):
-    task = load_data().get("tasks", {}).get(build_task_key(user_id, task_number))
+    task = get_task_by_key(build_task_key(user_id, task_number))
     if not task:
         await target_message.answer(f"❌ Не найдено задание №{task_number} User {user_id}")
         return
@@ -524,7 +526,7 @@ async def send_task_answer(target_message, user_id, task_number):
 
 
 async def send_task_text(target_message, user_id, task_number):
-    task = load_data().get("tasks", {}).get(build_task_key(user_id, task_number))
+    task = get_task_by_key(build_task_key(user_id, task_number))
     if not task:
         await target_message.answer(f"❌ Не найдено задание №{task_number} User {user_id}")
         return
@@ -541,9 +543,7 @@ async def send_task_text(target_message, user_id, task_number):
 
 @router.message(Command("start"))
 async def start(m: types.Message):
-    data = load_data()
-    data["telegram_subscribers"][str(m.chat.id)] = {"date": datetime.now().isoformat()}
-    save_data(data)
+    set_subscriber(m.chat.id, datetime.now().isoformat())
     logger.info(f"Новый подписчик: {m.chat.id}")
 
     await m.answer(
@@ -558,7 +558,10 @@ async def start(m: types.Message):
 @router.message(Command("reset_timer"))
 async def reset_timer_cmd(m: types.Message):
     try:
-        resp = requests.post(f"{Config.WEB_URL}/reset-timer", timeout=5)
+        resp = WEB_SESSION.post(
+            f"{Config.WEB_URL}/reset-timer",
+            timeout=Config.INTERNAL_HTTP_TIMEOUT,
+        )
         if resp.ok:
             await m.answer("⏱ Таймер сброшен.")
         else:
@@ -571,7 +574,10 @@ async def reset_timer_cmd(m: types.Message):
 @router.message(Command("delete_all"))
 async def delete_all_cmd(m: types.Message):
     try:
-        resp = requests.post(f"{Config.WEB_URL}/delete-all", timeout=5)
+        resp = WEB_SESSION.post(
+            f"{Config.WEB_URL}/delete-all",
+            timeout=Config.INTERNAL_HTTP_TIMEOUT,
+        )
         if resp.ok:
             await m.answer("🗑 Все задания и ответы удалены.")
         else:
@@ -590,7 +596,7 @@ async def tasks_cmd(m: types.Message):
 @router.message(Command("latest"))
 @router.message(F.text == LATEST_BUTTON_TEXT)
 async def latest_cmd(m: types.Message):
-    tasks = get_sorted_tasks(load_data())
+    tasks = get_sorted_tasks(get_all_tasks())
     if not tasks:
         await m.answer("Заданий пока нет.")
         return
@@ -619,9 +625,8 @@ async def handle_reply(m: types.Message):
     if not m.text or m.text.startswith("/"):
         return
 
-    data = load_data()
     key = f"{m.chat.id}:{m.reply_to_message.message_id}"
-    mapping = data["telegram_message_map"].get(key)
+    mapping = get_message_mapping(key)
 
     if mapping:
         task_key = mapping.get(
