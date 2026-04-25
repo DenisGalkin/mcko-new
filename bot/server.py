@@ -45,8 +45,14 @@ async def notify_subscribers(bot: Bot, task_key, user_id, task_number, filename,
     count = 0
     message_map_updates = {}
     task_label = f"№{task_number} User {user_id}"
+    subscriber_chat_ids = get_subscriber_chat_ids()
+    if not subscriber_chat_ids:
+        logger.warning(
+            f"Уведомление для {task_label} пропущено: в telegram_subscribers нет подписчиков"
+        )
+        return
 
-    for chat_id in get_subscriber_chat_ids():
+    for chat_id in subscriber_chat_ids:
         try:
             if path and path.exists():
                 caption = [f"📑 Новое задание {task_label}"]

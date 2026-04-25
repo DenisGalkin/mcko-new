@@ -31,7 +31,7 @@ const filterButtons = [...document.querySelectorAll(".admin_filter_btn")];
 const mobileListBtn = document.getElementById("mobileListBtn");
 const mobileEditorBtn = document.getElementById("mobileEditorBtn");
 const mobileRefreshBtn = document.getElementById("mobileRefreshBtn");
-const AUTO_REFRESH_MS = 5000;
+const AUTO_REFRESH_MS = 15000;
 
 const state = {
   tasks: normalizeTasks(initialTasks),
@@ -41,6 +41,7 @@ const state = {
   userFilter: "",
   mobilePane: "list",
   refreshInFlight: false,
+  snapshot: "",
 };
 
 function normalizeTasks(tasks) {
@@ -65,6 +66,20 @@ function compareAdminTasks(a, b) {
   return String(a.task_number || "").localeCompare(String(b.task_number || ""), undefined, {
     numeric: true,
   });
+}
+
+function buildTasksSnapshot(tasks) {
+  return JSON.stringify(
+    (tasks || []).map((task) => [
+      String(task.task_key || ""),
+      Number(task.user_id || 0),
+      String(task.task_number || ""),
+      String(task.filename || ""),
+      String(task.created || ""),
+      String(task.answer_text || ""),
+      String(task.task_text || ""),
+    ]),
+  );
 }
 
 function getFilteredTasks() {
@@ -205,12 +220,12 @@ function renderHeadingTags(task) {
 }
 
 function renderPreview(task) {
-  adminPreviewWrap.innerHTML = "";
-  adminDownloadLink.hidden = true;
-
   if (!task.filename) {
-    adminPreviewWrap.innerHTML =
-      '<div class="admin_preview_empty">У этого задания нет файла. Можно работать только с текстом и ответом.</div>';
+    if (!adminPreviewWrap.querySelector(".admin_preview_empty")) {
+      adminPreviewWrap.innerHTML =
+        '<div class="admin_preview_empty">У этого задания нет файла. Можно работать только с текстом и ответом.</div>';
+    }
+    adminDownloadLink.hidden = true;
     return;
   }
 
@@ -224,6 +239,11 @@ function renderPreview(task) {
   );
 
   if (isImage) {
+    const existingImage = adminPreviewWrap.querySelector(".admin_preview_image");
+    if (existingImage && existingImage.getAttribute("src") === fileUrl) {
+      return;
+    }
+    adminPreviewWrap.innerHTML = "";
     const img = document.createElement("img");
     img.src = fileUrl;
     img.alt = `Задание ${task.task_number}`;
@@ -232,8 +252,10 @@ function renderPreview(task) {
     return;
   }
 
-  adminPreviewWrap.innerHTML =
-    '<div class="admin_preview_empty">Предпросмотр для этого формата не поддерживается. Откройте файл отдельной ссылкой.</div>';
+  if (!adminPreviewWrap.querySelector(".admin_preview_empty")) {
+    adminPreviewWrap.innerHTML =
+      '<div class="admin_preview_empty">Предпросмотр для этого формата не поддерживается. Откройте файл отдельной ссылкой.</div>';
+  }
 }
 
 function syncNavigation() {
@@ -252,6 +274,7 @@ function updateTaskInState(updatedTask) {
     state.tasks[keyIndex] = normalized;
   }
   state.tasks.sort(compareAdminTasks);
+  state.snapshot = buildTasksSnapshot(state.tasks);
 }
 
 async function saveCurrentTask(fields) {
@@ -300,7 +323,13 @@ async function refreshTasks(options = {}) {
       }
       return;
     }
-    state.tasks = normalizeTasks(data.tasks || []);
+    const nextTasks = normalizeTasks(data.tasks || []);
+    const nextSnapshot = buildTasksSnapshot(nextTasks);
+    if (nextSnapshot === state.snapshot) {
+      return;
+    }
+    state.tasks = nextTasks;
+    state.snapshot = nextSnapshot;
     if (!state.tasks.some((task) => task.task_key === state.selectedTaskKey)) {
       state.selectedTaskKey = state.tasks[0] ? state.tasks[0].task_key : null;
     }
@@ -341,6 +370,7 @@ async function deleteCurrentTask() {
     }
 
     state.tasks = state.tasks.filter((item) => item.task_key !== task.task_key);
+    state.snapshot = buildTasksSnapshot(state.tasks);
     const filtered = getFilteredTasks();
     state.selectedTaskKey = filtered[0] ? filtered[0].task_key : null;
     renderStats();
@@ -458,6 +488,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 state.selectedTaskKey = state.tasks[0] ? state.tasks[0].task_key : null;
+state.snapshot = buildTasksSnapshot(state.tasks);
 renderStats();
 renderUserFilter();
 renderTaskList();

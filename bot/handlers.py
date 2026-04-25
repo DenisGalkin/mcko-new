@@ -29,6 +29,13 @@ ALL_FILTER = "0"
 WEB_SESSION = requests.Session()
 
 
+def touch_subscriber(chat_id):
+    try:
+        set_subscriber(chat_id, datetime.now().isoformat())
+    except Exception as exc:
+        logger.warning(f"Не удалось обновить подписку для {chat_id}: {exc}")
+
+
 def parse_task_ref(task_ref):
     raw_user_id, raw_task_number = str(task_ref).split("_", 1)
     return int(raw_user_id), raw_task_number
@@ -543,7 +550,7 @@ async def send_task_text(target_message, user_id, task_number):
 
 @router.message(Command("start"))
 async def start(m: types.Message):
-    set_subscriber(m.chat.id, datetime.now().isoformat())
+    touch_subscriber(m.chat.id)
     logger.info(f"Новый подписчик: {m.chat.id}")
 
     await m.answer(
@@ -557,6 +564,7 @@ async def start(m: types.Message):
 
 @router.message(Command("reset_timer"))
 async def reset_timer_cmd(m: types.Message):
+    touch_subscriber(m.chat.id)
     try:
         resp = WEB_SESSION.post(
             f"{Config.WEB_URL}/reset-timer",
@@ -573,6 +581,7 @@ async def reset_timer_cmd(m: types.Message):
 
 @router.message(Command("delete_all"))
 async def delete_all_cmd(m: types.Message):
+    touch_subscriber(m.chat.id)
     try:
         resp = WEB_SESSION.post(
             f"{Config.WEB_URL}/delete-all",
@@ -590,12 +599,14 @@ async def delete_all_cmd(m: types.Message):
 @router.message(Command("tasks"))
 @router.message(F.text == TASKS_BUTTON_TEXT)
 async def tasks_cmd(m: types.Message):
+    touch_subscriber(m.chat.id)
     await send_tasks_list(m)
 
 
 @router.message(Command("latest"))
 @router.message(F.text == LATEST_BUTTON_TEXT)
 async def latest_cmd(m: types.Message):
+    touch_subscriber(m.chat.id)
     tasks = get_sorted_tasks(get_all_tasks())
     if not tasks:
         await m.answer("Заданий пока нет.")
@@ -607,21 +618,25 @@ async def latest_cmd(m: types.Message):
 @router.message(Command("help"))
 @router.message(F.text == HELP_BUTTON_TEXT)
 async def help_cmd(m: types.Message):
+    touch_subscriber(m.chat.id)
     await m.answer(get_help_text(), reply_markup=get_main_keyboard())
 
 
 @router.message(F.text == RESET_BUTTON_TEXT)
 async def reset_timer_button(m: types.Message):
+    touch_subscriber(m.chat.id)
     await reset_timer_cmd(m)
 
 
 @router.message(F.text == DELETE_BUTTON_TEXT)
 async def delete_all_button(m: types.Message):
+    touch_subscriber(m.chat.id)
     await delete_all_cmd(m)
 
 
 @router.message(F.reply_to_message)
 async def handle_reply(m: types.Message):
+    touch_subscriber(m.chat.id)
     if not m.text or m.text.startswith("/"):
         return
 
@@ -653,6 +668,7 @@ async def handle_reply(m: types.Message):
 
 @router.callback_query(F.data.startswith("task:list:"))
 async def task_list_callback(callback: types.CallbackQuery):
+    touch_subscriber(callback.message.chat.id)
     page, user_id, task_number = parse_list_state(callback.data.split("task:list:", 1)[1])
     await send_tasks_list(
         callback.message,
@@ -666,6 +682,7 @@ async def task_list_callback(callback: types.CallbackQuery):
 
 @router.callback_query(F.data.startswith("task:view:"))
 async def task_view_callback(callback: types.CallbackQuery):
+    touch_subscriber(callback.message.chat.id)
     payload = callback.data.split("task:view:", 1)[1]
     task_ref, raw_state = payload.split(":", 1)
     user_id, task_number = parse_task_ref(task_ref)
@@ -684,6 +701,7 @@ async def task_view_callback(callback: types.CallbackQuery):
 
 @router.callback_query(F.data.startswith("task:file:"))
 async def task_file_callback(callback: types.CallbackQuery):
+    touch_subscriber(callback.message.chat.id)
     user_id, task_number = parse_task_ref(callback.data.split("task:file:", 1)[1])
     await resend_task_file(callback.message, user_id, task_number)
     await callback.answer("Файл отправлен")
@@ -691,6 +709,7 @@ async def task_file_callback(callback: types.CallbackQuery):
 
 @router.callback_query(F.data.startswith("task:answer:"))
 async def task_answer_callback(callback: types.CallbackQuery):
+    touch_subscriber(callback.message.chat.id)
     user_id, task_number = parse_task_ref(callback.data.split("task:answer:", 1)[1])
     await send_task_answer(callback.message, user_id, task_number)
     await callback.answer()
@@ -698,6 +717,7 @@ async def task_answer_callback(callback: types.CallbackQuery):
 
 @router.callback_query(F.data.startswith("task:text:"))
 async def task_text_callback(callback: types.CallbackQuery):
+    touch_subscriber(callback.message.chat.id)
     user_id, task_number = parse_task_ref(callback.data.split("task:text:", 1)[1])
     await send_task_text(callback.message, user_id, task_number)
     await callback.answer()
@@ -705,6 +725,7 @@ async def task_text_callback(callback: types.CallbackQuery):
 
 @router.message(F.text)
 async def fallback_text(m: types.Message):
+    touch_subscriber(m.chat.id)
     if m.text.startswith("/"):
         return
 
