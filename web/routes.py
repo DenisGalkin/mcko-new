@@ -18,6 +18,7 @@ from shared.manager import (
     get_next_task_number_for_user_db,
     get_task_by_key,
     get_tasks_for_user_db,
+    get_user_cookie_version,
     normalize_task_number,
     save_task_answer,
     update_task_fields,
@@ -31,6 +32,23 @@ main = Blueprint("main", __name__)
 START_TIME = datetime.now()
 USER_COOKIE_NAME = "mcko_user_id"
 BOT_NOTIFY_SESSION = requests.Session()
+
+
+def build_user_cookie_value(user_id, version=None):
+    current_version = int(version or get_user_cookie_version())
+    return f"{current_version}:{int(user_id)}"
+
+
+def parse_user_cookie_value(raw_value):
+    raw = str(raw_value or "").strip()
+    if not raw:
+        return None, None
+    if ":" not in raw:
+        return None, None
+    raw_version, raw_user_id = raw.split(":", 1)
+    if not raw_version.isdigit() or not raw_user_id.isdigit():
+        return None, None
+    return int(raw_version), int(raw_user_id)
 
 
 def parse_task_number_tokens(raw_value):
@@ -63,9 +81,15 @@ def build_task_number_sequence(start_task_number, count):
 
 
 def get_current_user_id(create=False):
-    cookie_value = str(request.cookies.get(USER_COOKIE_NAME, "")).strip()
-    if cookie_value.isdigit() and user_exists(int(cookie_value)):
-        return int(cookie_value), False
+    cookie_version = get_user_cookie_version()
+    raw_cookie_value = request.cookies.get(USER_COOKIE_NAME, "")
+    parsed_version, parsed_user_id = parse_user_cookie_value(raw_cookie_value)
+    if (
+        parsed_version == cookie_version
+        and parsed_user_id is not None
+        and user_exists(parsed_user_id)
+    ):
+        return parsed_user_id, False
     if create:
         return allocate_user_id(), True
     return None, False
@@ -75,7 +99,7 @@ def with_user_cookie(response, user_id, created):
     if created:
         response.set_cookie(
             USER_COOKIE_NAME,
-            str(user_id),
+            build_user_cookie_value(user_id),
             max_age=60 * 60 * 24 * 365 * 5,
             samesite="Lax",
         )

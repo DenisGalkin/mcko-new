@@ -198,6 +198,13 @@ def init_db():
                 ON CONFLICT(key) DO NOTHING
                 """
             )
+            conn.execute(
+                """
+                INSERT INTO meta(key, value)
+                VALUES('user_cookie_version', '1')
+                ON CONFLICT(key) DO NOTHING
+                """
+            )
             _DB_READY = True
         finally:
             conn.close()
@@ -228,6 +235,39 @@ def get_next_user_id():
         return int(row["value"]) if row and str(row["value"]).isdigit() else 1
     finally:
         conn.close()
+
+
+def get_user_cookie_version():
+    init_db()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT value FROM meta WHERE key = 'user_cookie_version'"
+        ).fetchone()
+        return int(row["value"]) if row and str(row["value"]).isdigit() else 1
+    finally:
+        conn.close()
+
+
+def bump_user_cookie_version(conn=None):
+    if conn is None:
+        with _transaction() as tx:
+            return bump_user_cookie_version(tx)
+
+    row = conn.execute(
+        "SELECT value FROM meta WHERE key = 'user_cookie_version'"
+    ).fetchone()
+    current = int(row["value"]) if row and str(row["value"]).isdigit() else 1
+    new_value = current + 1
+    conn.execute(
+        """
+        INSERT INTO meta(key, value)
+        VALUES('user_cookie_version', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        (str(new_value),),
+    )
+    return new_value
 
 
 def has_user(data, user_id):
@@ -589,6 +629,7 @@ def clear_all_data():
             conn.execute("DELETE FROM users")
             conn.execute("DELETE FROM telegram_message_map")
             conn.execute("DELETE FROM telegram_subscribers")
+            next_cookie_version = bump_user_cookie_version(conn)
             conn.execute(
                 """
                 INSERT INTO meta(key, value)
@@ -596,6 +637,7 @@ def clear_all_data():
                 ON CONFLICT(key) DO UPDATE SET value = '1'
                 """
             )
+            logger.info(f"Версия пользовательских cookie обновлена до {next_cookie_version}")
         return True
     except Exception as exc:
         logger.error(f"Ошибка clear_all_data: {exc}")
